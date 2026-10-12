@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,12 +21,16 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Wifi,
+  WifiOff,
+  UserCheck,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 type SetRecord = {
   id: string;
   exercise_id: string;
+  user_id: string;
   set_order: number;
   set_type: string;
   weight_kg: number;
@@ -52,6 +57,10 @@ type SessionData = {
   started_at: string;
   ended_at: string | null;
   workspace_id: string;
+  session_participants?: Array<{
+    user_id: string;
+    profiles?: { id: string; display_name: string; email: string } | null;
+  }>;
 };
 
 export function ActiveWorkoutView({
@@ -67,6 +76,8 @@ export function ActiveWorkoutView({
 }) {
   const [sets, setSets] = React.useState<SetRecord[]>(initialSets);
   const [finishing, setFinishing] = React.useState(false);
+  const [isConnected, setIsConnected] = React.useState(false);
+  const [activePartnerCount, setActivePartnerCount] = React.useState(1);
   const [selectedExerciseId, setSelectedExerciseId] = React.useState(
     availableExercises[0]?.id || ""
   );
@@ -87,6 +98,97 @@ export function ActiveWorkoutView({
     const interval = setInterval(updateElapsed, 1000);
     return () => clearInterval(interval);
   }, [session.started_at]);
+
+  // SUPABASE REALTIME SUBSCRIPTION & PRESENCE
+  React.useEffect(() => {
+    const supabase = createClient();
+    const channelName = `session:${session.id}`;
+
+    const channel = supabase.channel(channelName, {
+      config: {
+        presence: {
+          key: currentUserId,
+        },
+      },
+    });
+
+    // 1. Listen for set changes in real time (INSERT, UPDATE, DELETE)
+    channel
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "workout_sets",
+          filter: `session_id=eq.${session.id}`,
+        },
+        (payload) => {
+          const newSet = payload.new as SetRecord;
+          setSets((prev) => {
+            if (prev.some((s) => s.id === newSet.id)) return prev;
+            const ex = availableExercises.find((e) => e.id === newSet.exercise_id);
+            return [...prev, { ...newSet, exercises: ex || null }];
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "workout_sets",
+          filter: `session_id=eq.${session.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as SetRecord;
+          setSets((prev) =>
+            prev.map((s) => {
+              if (s.id !== updated.id) return s;
+              return {
+                ...s,
+                ...updated,
+                exercises: s.exercises, // preserve relations
+                profiles: s.profiles,
+              };
+            })
+          );
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "workout_sets",
+          filter: `session_id=eq.${session.id}`,
+        },
+        (payload) => {
+          const deletedId = (payload.old as { id: string }).id;
+          setSets((prev) => prev.filter((s) => s.id !== deletedId));
+        }
+      )
+      // 2. Track collaborative presence
+      .on("presence", { event: "sync" }, () => {
+        const presenceState = channel.presenceState();
+        const userCount = Object.keys(presenceState).length;
+        setActivePartnerCount(Math.max(1, userCount));
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          setIsConnected(true);
+          channel.track({
+            online_at: new Date().toISOString(),
+            user_id: currentUserId,
+          });
+        } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+          setIsConnected(false);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session.id, currentUserId, availableExercises]);
 
   // Group sets by exercise
   const exercisesInSession = React.useMemo(() => {
@@ -123,8 +225,11 @@ export function ActiveWorkoutView({
 
     if (res.data) {
       const created = res.data as SetRecord;
-      setSets((prev) => [...prev, created]);
-      router.refresh();
+      setSets((prev) => {
+        if (prev.some((s) => s.id === created.id)) return prev;
+        const ex = availableExercises.find((e) => e.id === created.exercise_id);
+        return [...prev, { ...created, exercises: ex || null }];
+      });
     }
   }
 
@@ -136,7 +241,7 @@ export function ActiveWorkoutView({
     const current = sets.find((s) => s.id === setId);
     if (!current) return;
 
-    // Optimistic update
+    // Optimistic UI update
     setSets((prev) =>
       prev.map((s) => (s.id === setId ? { ...s, [field]: value } : s))
     );
@@ -149,7 +254,7 @@ export function ActiveWorkoutView({
 
     if (res.error) {
       setError(res.error);
-      router.refresh(); // reconcile state
+      router.refresh(); // fetch authoritative state on conflict
     } else if (res.data) {
       const updated = res.data as SetRecord;
       setSets((prev) =>
@@ -161,7 +266,6 @@ export function ActiveWorkoutView({
   async function handleDeleteSet(setId: string) {
     setSets((prev) => prev.filter((s) => s.id !== setId));
     await deleteSetAction(setId);
-    router.refresh();
   }
 
   async function handleFinish() {
@@ -186,11 +290,45 @@ export function ActiveWorkoutView({
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
               <CardTitle className="text-xl font-bold">{session.name}</CardTitle>
             </div>
-            <div className="flex items-center gap-1.5 font-mono text-xs text-zinc-400 bg-zinc-950/80 px-2.5 py-1 rounded-md border border-zinc-800">
-              <Clock className="h-3.5 w-3.5 text-emerald-400" />
-              <span>{elapsed}</span>
+
+            <div className="flex items-center gap-2">
+              {/* Live WebSocket Status Indicator */}
+              <div
+                className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded font-medium border ${
+                  isConnected
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                    : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                }`}
+              >
+                {isConnected ? (
+                  <>
+                    <Wifi className="h-3 w-3" />
+                    <span>Live</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="h-3 w-3" />
+                    <span>Reconnecting</span>
+                  </>
+                )}
+              </div>
+
+              {/* Collaborative Partner Presence */}
+              {activePartnerCount > 1 && (
+                <div className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  <UserCheck className="h-3 w-3" />
+                  <span>{activePartnerCount} active</span>
+                </div>
+              )}
+
+              {/* Elapsed Duration */}
+              <div className="flex items-center gap-1.5 font-mono text-xs text-zinc-400 bg-zinc-950/80 px-2.5 py-1 rounded-md border border-zinc-800">
+                <Clock className="h-3.5 w-3.5 text-emerald-400" />
+                <span>{elapsed}</span>
+              </div>
             </div>
           </div>
+
           <div className="flex items-center gap-4 text-xs text-zinc-400 pt-1">
             <span>
               Sets: <strong className="text-zinc-200">{completedSetsCount}</strong> / {sets.length}

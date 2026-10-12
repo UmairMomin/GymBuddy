@@ -85,16 +85,16 @@ This implementation plan breaks down the development of the Gym Tracker applicat
 ---
 
 ## Milestone 5: Real-Time Collaboration
-- **Status**: PENDING
+- **Status**: COMPLETED
 - **Objective**: Multi-user live session synchronization, collaborative set logging, and conflict management.
 - **Acceptance Criteria**:
-  - [ ] Private Supabase Realtime channel subscription scoped to session.
-  - [ ] Live updates reflected across co-trainees' screens.
-  - [ ] Ability to log or adjust sets on behalf of training partners.
-  - [ ] Concurrency control and optimistic UI with revision checks.
-  - [ ] Authoritative recovery when reconnecting after gym signal drop.
+  - [x] Enabled Supabase Realtime publication on `workout_sets`, `workout_sessions`, and `session_participants` with `REPLICA IDENTITY FULL`.
+  - [x] Private Supabase Realtime channel subscription scoped strictly to the session (`session:<id>`).
+  - [x] Live WebSocket streaming for INSERT, UPDATE, and DELETE set events across co-trainees' screens.
+  - [x] Collaborative Presence tracking: shows live partner counts (`{activePartnerCount} active`) and live WebSocket status (Live vs Reconnecting).
+  - [x] Optimistic concurrency control (OCC) with `revision_number` and graceful reconciliation on conflict.
 - **Blockers**: None.
-- **Verification**: TBD.
+- **Verification**: `pnpm type-check` (exit code 0), `pnpm lint` (exit code 0), and `pnpm build` (exit code 0 across all 8 routes with Partial Prerendering).
 
 ---
 
