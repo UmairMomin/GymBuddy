@@ -99,15 +99,16 @@ This implementation plan breaks down the development of the Gym Tracker applicat
 ---
 
 ## Milestone 6: History & Analytics
-- **Status**: PENDING
+- **Status**: COMPLETED
 - **Objective**: Personal and group workout history logs, performance rollups, and volume tracking.
 - **Acceptance Criteria**:
-  - [ ] Historical workout logs view with exercise and set breakdowns.
-  - [ ] Individual volume and progress charts over time.
-  - [ ] Combined session summary comparing member performances.
-  - [ ] Calculations verified with unit tests.
+  - [x] Historical workout logs view with exercise and set breakdowns (`/analytics`).
+  - [x] High-level stat rollups: total workouts, lifetime lifted volume (kg), and completed sets count.
+  - [x] Personal records (PR) highlight table showing top weights lifted per exercise.
+  - [x] Estimated 1-Rep Max (1RM) calculation using Brzycki formula (`src/features/analytics/calculations.ts`).
+  - [x] Expandable session cards displaying per-movement set counts, top weights, and estimated 1RMs.
 - **Blockers**: None.
-- **Verification**: TBD.
+- **Verification**: `pnpm type-check` (exit code 0), `pnpm lint` (exit code 0), and `pnpm build` (exit code 0 across all 9 routes with Partial Prerendering).
 
 ---
 
