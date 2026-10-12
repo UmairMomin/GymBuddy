@@ -64,15 +64,21 @@ This implementation plan breaks down the development of the Gym Tracker applicat
 
 ---
 
-## Milestone 4: Workout Session Engine
+## Milestone 4: Workout Session Engine & Exercise Management
 - **Status**: PENDING
-- **Objective**: Core workout tracking engine supporting active live sessions, set logging, and personal record attribution.
+- **Objective**: Implement dedicated Exercise Management (`/exercises`) with full CRUD, plus core workout tracking engine supporting active live sessions, set logging, rest timer, and personal record attribution.
 - **Acceptance Criteria**:
-  - [ ] Start session from a routine or empty slate.
-  - [ ] Dynamic set logging (reps, weight, RPE/type, notes, completed).
-  - [ ] Separate tracking for individual participants within the shared workout.
-  - [ ] Mobile-optimized live workout entry interface (min 44px touch targets).
-  - [ ] Session completion and historical snapshot preservation.
+  - [ ] **Dedicated Exercise Management (`/exercises`)**:
+    - Searchable, filterable movement library (filter by category/muscle group and equipment).
+    - Edit custom exercise details (name, category, equipment, notes/cues).
+    - Delete custom exercises with referential safety checks (prevent orphaned sets).
+    - Navigation link to `/exercises` on desktop header and routine builder.
+  - [ ] **Workout Session Engine**:
+    - Start session from a routine (auto-populate planned exercises/sets) or empty freestyle slate.
+    - Dynamic set logging (reps, weight in kg/lbs, RPE/type, notes, completed checkmarks).
+    - Mobile-optimized live workout entry interface (min 44px touch targets).
+    - Rest countdown timer between sets with completion alert.
+    - Session completion snapshotting: calculate total volume, elapsed time, and preserve historical records.
 - **Blockers**: None.
 - **Verification**: TBD.
 
