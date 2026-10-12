@@ -166,6 +166,9 @@ export async function RoutinesContent() {
           <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Movement Library ({exercises.length} available)
           </h2>
+          <Link href="/exercises" className="text-xs text-emerald-400 hover:underline">
+            Manage all exercises →
+          </Link>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
           {exercises.map((ex) => (

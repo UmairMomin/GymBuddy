@@ -30,6 +30,14 @@ export const createExerciseSchema = z.object({
   workspace_id: z.string().uuid("A valid workspace is required to create custom exercises"),
 });
 
+export const updateExerciseSchema = z.object({
+  id: z.string().uuid("Valid exercise ID required"),
+  name: z.string().min(2, "Exercise name must be at least 2 characters").max(100),
+  category: exerciseCategorySchema,
+  primary_equipment: exerciseEquipmentSchema.optional(),
+  notes: z.string().max(500).optional(),
+});
+
 export const plannedExerciseItemSchema = z.object({
   exercise_id: z.string().uuid(),
   exercise_name: z.string(),

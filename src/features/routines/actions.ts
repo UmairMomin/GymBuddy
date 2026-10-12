@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import {
   createExerciseSchema,
+  updateExerciseSchema,
   createRoutineSchema,
   type PlannedExerciseItem,
 } from "@/features/routines/schemas";
@@ -126,7 +127,86 @@ export async function createCustomExerciseAction(formData: FormData): Promise<Ac
   }
 
   revalidatePath("/routines");
+  revalidatePath("/exercises");
   return { success: true, data };
+}
+
+/**
+ * Update an existing custom exercise
+ */
+export async function updateCustomExerciseAction(formData: FormData): Promise<ActionResult> {
+  const raw = {
+    id: formData.get("id"),
+    name: formData.get("name"),
+    category: formData.get("category"),
+    primary_equipment: formData.get("primary_equipment") || undefined,
+    notes: formData.get("notes") || undefined,
+  };
+
+  const validated = updateExerciseSchema.safeParse(raw);
+  if (!validated.success) {
+    return { error: validated.error.issues[0]?.message ?? "Invalid exercise data" };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("exercises")
+    .update({
+      name: validated.data.name,
+      category: validated.data.category,
+      primary_equipment: validated.data.primary_equipment ?? null,
+      notes: validated.data.notes ?? null,
+    })
+    .eq("id", validated.data.id)
+    .eq("is_custom", true)
+    .select()
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/routines");
+  revalidatePath("/exercises");
+  return { success: true, data };
+}
+
+/**
+ * Delete a custom exercise with safety checks
+ */
+export async function deleteCustomExerciseAction(exerciseId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+
+  // 1. Safety check: Check if any workout_sets reference this exercise
+  const { count: setsCount, error: countError } = await supabase
+    .from("workout_sets")
+    .select("id", { count: "exact", head: true })
+    .eq("exercise_id", exerciseId);
+
+  if (countError) {
+    return { error: countError.message };
+  }
+
+  if (setsCount && setsCount > 0) {
+    return {
+      error: `Cannot delete: this movement has been performed in ${setsCount} logged set(s). Keeping it preserves your historical workout records.`,
+    };
+  }
+
+  // 2. Perform delete
+  const { error } = await supabase
+    .from("exercises")
+    .delete()
+    .eq("id", exerciseId)
+    .eq("is_custom", true);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/routines");
+  revalidatePath("/exercises");
+  return { success: true };
 }
 
 /**

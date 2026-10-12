@@ -56,6 +56,7 @@ export default function RootLayout({
               <nav className="hidden md:flex items-center space-x-4 text-sm font-medium">
                 <Link href="/" className="text-zinc-200 hover:text-white transition-colors">Workout</Link>
                 <Link href="/routines" className="text-zinc-400 hover:text-white transition-colors">Routines</Link>
+                <Link href="/exercises" className="text-zinc-400 hover:text-white transition-colors">Exercises</Link>
                 <Link href="/group" className="text-zinc-400 hover:text-white transition-colors">Group</Link>
                 <Link href="/analytics" className="text-zinc-400 hover:text-white transition-colors">Analytics</Link>
                 <Link href="/settings" className="text-zinc-400 hover:text-white transition-colors">Settings</Link>

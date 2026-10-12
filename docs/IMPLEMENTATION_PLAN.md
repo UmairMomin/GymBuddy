@@ -65,7 +65,7 @@ This implementation plan breaks down the development of the Gym Tracker applicat
 ---
 
 ## Milestone 4: Workout Session Engine & Exercise Management
-- **Status**: PENDING
+- **Status**: IN PROGRESS
 - **Objective**: Implement dedicated Exercise Management (`/exercises`) with full CRUD, plus core workout tracking engine supporting active live sessions, set logging, rest timer, and personal record attribution.
 - **Acceptance Criteria**:
   - [ ] **Dedicated Exercise Management (`/exercises`)**:
