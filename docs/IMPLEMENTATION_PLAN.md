@@ -1,0 +1,126 @@
+# Gym Tracker — Implementation Plan
+
+This implementation plan breaks down the development of the Gym Tracker application into small, verifiable milestones based on [docs/MASTER_SPEC.md](file:///Users/umairmomin/Desktop/gymbuddy/docs/MASTER_SPEC.md).
+
+> **Rule**: Do not mark a milestone complete without concrete verification evidence (type-check passes, automated tests pass, or manual verification steps recorded).
+
+---
+
+## Milestone 0: Repository Audit & Planning
+- **Status**: IN PROGRESS
+- **Objective**: Establish project instruction structure, inspect repository status, and set up project tracking.
+- **Acceptance Criteria**:
+  - [x] Create `AGENTS.md` root instruction file (< 125 lines).
+  - [x] Verify `docs/MASTER_SPEC.md` is preserved and authoritative.
+  - [x] Create `.agents/rules/` (`engineering.md`, `database.md`, `realtime.md`) with valid frontmatter.
+  - [x] Initialize `docs/AGENT_NOTES.md` and `docs/IMPLEMENTATION_PLAN.md`.
+  - [ ] Initialize Git repository if uninitialized.
+- **Blockers**: None.
+- **Verification**: Directory structure inspection and rule frontmatter validation completed.
+
+---
+
+## Milestone 1: Foundation
+- **Status**: PENDING
+- **Objective**: Set up core Next.js application scaffolding, Tailwind CSS, shadcn/ui, TypeScript configuration, and base layout.
+- **Acceptance Criteria**:
+  - [ ] Next.js 14+ (App Router) initialized with strict TypeScript.
+  - [ ] Tailwind CSS and base shadcn/ui components configured.
+  - [ ] Mobile-first base application shell and navigation bar.
+  - [ ] Linting and type-checking scripts configured and passing clean.
+- **Blockers**: None.
+- **Verification**: TBD.
+
+---
+
+## Milestone 2: Authentication, Database & RLS
+- **Status**: PENDING
+- **Objective**: Set up Supabase project, local development migrations, authentication flow, and workspace/membership data model with RLS.
+- **Acceptance Criteria**:
+  - [ ] Supabase CLI initialized with migration workflow.
+  - [ ] User authentication (email/password or magic link) via Supabase Auth.
+  - [ ] Workspaces and workspace members table with complete RLS policies.
+  - [ ] Negative security tests verifying cross-workspace isolation.
+  - [ ] TypeScript types generated from database schema.
+- **Blockers**: None.
+- **Verification**: TBD.
+
+---
+
+## Milestone 3: Exercises & Routines
+- **Status**: PENDING
+- **Objective**: Implement exercise catalog management and routine definition with versioning.
+- **Acceptance Criteria**:
+  - [ ] Pre-seeded standard exercise library + custom exercise creation.
+  - [ ] Routine builder with versioned routine structures (`routines`, `routine_versions`).
+  - [ ] Full CRUD operations with Zod validation.
+  - [ ] RLS policies ensuring routine access is scoped to authorized workspace members.
+- **Blockers**: None.
+- **Verification**: TBD.
+
+---
+
+## Milestone 4: Workout Session Engine
+- **Status**: PENDING
+- **Objective**: Core workout tracking engine supporting active live sessions, set logging, and personal record attribution.
+- **Acceptance Criteria**:
+  - [ ] Start session from a routine or empty slate.
+  - [ ] Dynamic set logging (reps, weight, RPE/type, notes, completed).
+  - [ ] Separate tracking for individual participants within the shared workout.
+  - [ ] Mobile-optimized live workout entry interface (min 44px touch targets).
+  - [ ] Session completion and historical snapshot preservation.
+- **Blockers**: None.
+- **Verification**: TBD.
+
+---
+
+## Milestone 5: Real-Time Collaboration
+- **Status**: PENDING
+- **Objective**: Multi-user live session synchronization, collaborative set logging, and conflict management.
+- **Acceptance Criteria**:
+  - [ ] Private Supabase Realtime channel subscription scoped to session.
+  - [ ] Live updates reflected across co-trainees' screens.
+  - [ ] Ability to log or adjust sets on behalf of training partners.
+  - [ ] Concurrency control and optimistic UI with revision checks.
+  - [ ] Authoritative recovery when reconnecting after gym signal drop.
+- **Blockers**: None.
+- **Verification**: TBD.
+
+---
+
+## Milestone 6: History & Analytics
+- **Status**: PENDING
+- **Objective**: Personal and group workout history logs, performance rollups, and volume tracking.
+- **Acceptance Criteria**:
+  - [ ] Historical workout logs view with exercise and set breakdowns.
+  - [ ] Individual volume and progress charts over time.
+  - [ ] Combined session summary comparing member performances.
+  - [ ] Calculations verified with unit tests.
+- **Blockers**: None.
+- **Verification**: TBD.
+
+---
+
+## Milestone 7: Mobile Polish, PWA & Exports
+- **Status**: PENDING
+- **Objective**: PWA manifest, service worker configuration, responsive mobile ergonomics, and data export.
+- **Acceptance Criteria**:
+  - [ ] Progressive Web App (manifest.json, icons, install prompt support).
+  - [ ] Mobile ergonomics audit (safe areas, virtual keyboard handling).
+  - [ ] CSV / JSON workout data export.
+  - [ ] Offline indicator with graceful degradation.
+- **Blockers**: None.
+- **Verification**: TBD.
+
+---
+
+## Milestone 8: Production Readiness
+- **Status**: PENDING
+- **Objective**: End-to-end testing, security audit, performance optimization, and production checklist.
+- **Acceptance Criteria**:
+  - [ ] Full RLS audit and automated security testing.
+  - [ ] End-to-end user flows tested.
+  - [ ] Bundle size optimization and Lighthouse mobile audit.
+  - [ ] Final verification of all acceptance criteria against `docs/MASTER_SPEC.md`.
+- **Blockers**: None.
+- **Verification**: TBD.
