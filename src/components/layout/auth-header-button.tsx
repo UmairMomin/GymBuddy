@@ -46,11 +46,14 @@ export function AuthHeaderButton() {
     );
   }
 
+  const username =
+    user.user_metadata?.display_name || user.email?.split("@")[0] || "User";
+
   return (
     <div className="flex items-center space-x-2">
       <span className="flex items-center gap-1 text-zinc-300 font-medium">
         <User className="h-3.5 w-3.5 text-emerald-400" />
-        <span>{user.email?.split("@")[0]}</span>
+        <span className="capitalize">{username}</span>
       </span>
       <form action={signOutAction}>
         <button

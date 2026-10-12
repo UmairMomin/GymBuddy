@@ -12,14 +12,12 @@ export function AuthForm() {
   const [isSignUp, setIsSignUp] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setSuccessMsg(null);
 
     const formData = new FormData(e.currentTarget);
     const action = isSignUp ? signUpAction : signInAction;
@@ -29,72 +27,48 @@ export function AuthForm() {
       setError(res.error);
       setLoading(false);
     } else {
-      if (isSignUp) {
-        setSuccessMsg("Account created! If email confirmation is required, please check your inbox.");
-        setLoading(false);
-      } else {
-        router.refresh();
-      }
+      router.push("/");
+      router.refresh();
     }
   }
 
   return (
-    <Card className="border-zinc-800 bg-zinc-900/90 shadow-xl max-w-sm mx-auto">
+    <Card className="border-zinc-800 bg-zinc-900/90 shadow-xl max-w-sm mx-auto w-full">
       <CardHeader className="text-center space-y-2">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400">
           <Dumbbell className="h-6 w-6" />
         </div>
         <CardTitle className="text-xl">
-          {isSignUp ? "Create your account" : "Sign in to Gym Tracker"}
+          {isSignUp ? "Create an account" : "Sign in to Gym Tracker"}
         </CardTitle>
-        <CardDescription className="text-zinc-400">
+        <CardDescription className="text-zinc-400 text-xs">
           {isSignUp
-            ? "Track workouts with your training group"
-            : "Continue where you left off with your partners"}
+            ? "Enter a username and password to start tracking"
+            : "Enter your username and password to continue"}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-500/10 p-3 text-sm text-red-400 border border-red-500/20">
+            <div className="flex items-center gap-2 rounded-lg bg-red-500/10 p-3 text-xs text-red-400 border border-red-500/20">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          {successMsg && (
-            <div className="rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-400 border border-emerald-500/20">
-              {successMsg}
-            </div>
-          )}
-
-          {isSignUp && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-zinc-300" htmlFor="displayName">
-                Display Name
-              </label>
-              <Input
-                id="displayName"
-                name="displayName"
-                type="text"
-                placeholder="e.g. Alex"
-                required
-                disabled={loading}
-              />
-            </div>
-          )}
-
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-300" htmlFor="email">
-              Email
+            <label className="text-xs font-medium text-zinc-300" htmlFor="username">
+              Username
             </label>
             <Input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="alex@example.com"
+              id="username"
+              name="username"
+              type="text"
+              placeholder="e.g. alex_lift"
               required
               disabled={loading}
+              autoCapitalize="none"
+              autoCorrect="off"
             />
           </div>
 
@@ -114,7 +88,7 @@ export function AuthForm() {
 
           <Button
             type="submit"
-            className="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold"
+            className="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold h-11"
             disabled={loading}
           >
             {loading ? (
@@ -132,7 +106,6 @@ export function AuthForm() {
               onClick={() => {
                 setIsSignUp(!isSignUp);
                 setError(null);
-                setSuccessMsg(null);
               }}
               className="text-xs text-zinc-400 hover:text-zinc-200 underline"
             >
