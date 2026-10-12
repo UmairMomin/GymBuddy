@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getExercisesAction, getOrCreateDefaultWorkspaceAction, getRoutinesAction } from "@/features/routines/actions";
 import { RoutineBuilderDialog } from "@/features/routines/components/routine-builder-dialog";
@@ -8,6 +9,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
 export async function RoutinesContent() {
+  await connection();
   const supabase = await createClient();
   const {
     data: { user },
