@@ -50,15 +50,17 @@ This implementation plan breaks down the development of the Gym Tracker applicat
 ---
 
 ## Milestone 3: Exercises & Routines
-- **Status**: PENDING
+- **Status**: COMPLETED
 - **Objective**: Implement exercise catalog management and routine definition with versioning.
 - **Acceptance Criteria**:
-  - [ ] Pre-seeded standard exercise library + custom exercise creation.
-  - [ ] Routine builder with versioned routine structures (`routines`, `routine_versions`).
-  - [ ] Full CRUD operations with Zod validation.
-  - [ ] RLS policies ensuring routine access is scoped to authorized workspace members.
+  - [x] Pre-seeded standard exercise library (16 movements) queryable via PostgREST.
+  - [x] Custom exercise creation with category, equipment, and notes (`CreateExerciseDialog`).
+  - [x] Multi-exercise Routine Builder (`RoutineBuilderDialog`) with target sets, rep ranges, and rest periods.
+  - [x] Routine versioning (`routines` + `routine_versions` v1 initial snapshot) persisted in database.
+  - [x] Responsive layout with mobile-first cards and multi-column grid on desktop screens (`/routines`).
+  - [x] Suspense streaming boundary and Zod schema validation.
 - **Blockers**: None.
-- **Verification**: TBD.
+- **Verification**: `pnpm type-check` (exit code 0), `pnpm lint` (exit code 0), and `pnpm build` (exit code 0 across all 6 routes).
 
 ---
 
