@@ -35,7 +35,7 @@ This implementation plan breaks down the development of the Gym Tracker applicat
 ---
 
 ## Milestone 2: Authentication, Database & RLS
-- **Status**: PENDING
+- **Status**: IN PROGRESS
 - **Objective**: Set up Supabase project, local development migrations, authentication flow, and workspace/membership data model with RLS.
 - **Acceptance Criteria**:
   - [ ] Supabase CLI initialized with migration workflow.
