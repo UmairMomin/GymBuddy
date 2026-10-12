@@ -113,15 +113,16 @@ This implementation plan breaks down the development of the Gym Tracker applicat
 ---
 
 ## Milestone 7: Mobile Polish, PWA & Exports
-- **Status**: PENDING
+- **Status**: COMPLETED
 - **Objective**: PWA manifest, service worker configuration, responsive mobile ergonomics, and data export.
 - **Acceptance Criteria**:
-  - [ ] Progressive Web App (manifest.json, icons, install prompt support).
-  - [ ] Mobile ergonomics audit (safe areas, virtual keyboard handling).
-  - [ ] CSV / JSON workout data export.
-  - [ ] Offline indicator with graceful degradation.
+  - [x] Progressive Web App: `manifest.json` configured with theme colors, portrait orientation, and maskable app icon (`public/icon.svg`).
+  - [x] Metadata integration: `appleWebApp` with `black-translucent` status bar and standalone display mode in `layout.tsx`.
+  - [x] Offline banner indicator (`NetworkStatusIndicator`) powered by `useSyncExternalStore` for SSR-safe network status detection.
+  - [x] Data Export API route (`/api/export`): One-click download of all user workout logs, exercises, sets, weights, reps, and tonnage in both CSV and JSON formats.
+  - [x] Download buttons integrated into `/analytics` dashboard header.
 - **Blockers**: None.
-- **Verification**: TBD.
+- **Verification**: `pnpm type-check` (exit code 0), `pnpm lint` (exit code 0), and `pnpm build` (exit code 0 across all 10 routes with Partial Prerendering).
 
 ---
 

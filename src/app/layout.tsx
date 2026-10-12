@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { MobileNavigation } from "@/components/layout/mobile-navigation";
 import { AuthHeaderButton } from "@/components/layout/auth-header-button";
+import { NetworkStatusIndicator } from "@/components/layout/network-status-indicator";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,9 +21,10 @@ export const metadata: Metadata = {
   title: "Gym Tracker",
   description: "Collaborative workout tracking for groups and workout partners.",
   applicationName: "Gym Tracker",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "Gym Tracker",
   },
 };
@@ -46,6 +48,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-zinc-950 text-zinc-50 pb-20 selection:bg-zinc-800`}
       >
+        <NetworkStatusIndicator />
         <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-4 pb-20 md:pb-8">
           <header className="flex items-center justify-between border-b border-zinc-800 pb-3">
             <div className="flex items-center space-x-6">
