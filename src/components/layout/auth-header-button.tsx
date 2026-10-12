@@ -1,13 +1,39 @@
-import { createClient } from "@/lib/supabase/server";
+"use client";
+
+import * as React from "react";
+import { createClient } from "@/lib/supabase/client";
 import { signOutAction } from "@/features/auth/actions";
 import { LogOut, User } from "lucide-react";
 import Link from "next/link";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
-export async function AuthHeaderButton() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export function AuthHeaderButton() {
+  const [user, setUser] = React.useState<SupabaseUser | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const supabase = createClient();
+
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  if (loading) {
+    return <div className="h-7 w-16 animate-pulse rounded bg-zinc-800" />;
+  }
 
   if (!user) {
     return (
