@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
 import { MobileNavigation } from "@/components/layout/mobile-navigation";
 import "./globals.css";
 
@@ -43,19 +44,30 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-zinc-950 text-zinc-50 pb-20 selection:bg-zinc-800`}
       >
-        <div className="mx-auto flex min-h-screen max-w-md flex-col px-4 pt-4">
+        <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-4 pb-20 md:pb-8">
           <header className="flex items-center justify-between border-b border-zinc-800 pb-3">
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-6">
               <span className="text-lg font-bold tracking-tight">GYM TRACKER</span>
+              {/* Desktop Navigation Links */}
+              <nav className="hidden md:flex items-center space-x-4 text-sm font-medium">
+                <Link href="/" className="text-zinc-200 hover:text-white transition-colors">Workout</Link>
+                <Link href="/routines" className="text-zinc-400 hover:text-white transition-colors">Routines</Link>
+                <Link href="/group" className="text-zinc-400 hover:text-white transition-colors">Group</Link>
+                <Link href="/analytics" className="text-zinc-400 hover:text-white transition-colors">Analytics</Link>
+                <Link href="/settings" className="text-zinc-400 hover:text-white transition-colors">Settings</Link>
+              </nav>
             </div>
             <div className="flex items-center space-x-2 text-xs text-zinc-400">
               <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>Ready</span>
             </div>
           </header>
-          <main className="flex-1 py-4">{children}</main>
+          <main className="flex-1 py-6">{children}</main>
         </div>
-        <MobileNavigation />
+        {/* Mobile Navigation (Hidden on md/desktop screens) */}
+        <div className="md:hidden">
+          <MobileNavigation />
+        </div>
       </body>
     </html>
   );
