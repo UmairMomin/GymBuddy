@@ -22,15 +22,15 @@ This implementation plan breaks down the development of the Gym Tracker applicat
 ---
 
 ## Milestone 1: Foundation
-- **Status**: PENDING
+- **Status**: COMPLETED
 - **Objective**: Set up core Next.js application scaffolding, Tailwind CSS, shadcn/ui, TypeScript configuration, and base layout.
 - **Acceptance Criteria**:
-  - [ ] Next.js 14+ (App Router) initialized with strict TypeScript.
-  - [ ] Tailwind CSS and base shadcn/ui components configured.
-  - [ ] Mobile-first base application shell and navigation bar.
-  - [ ] Linting and type-checking scripts configured and passing clean.
+  - [x] Next.js 16+ (App Router) initialized with strict TypeScript.
+  - [x] Tailwind CSS v4, Lucide icons, class-variance-authority, and base UI primitives (`button`, `card`) configured.
+  - [x] Mobile-first base application shell, dark theme, and bottom navigation bar with 44px+ touch targets.
+  - [x] Linting, type-checking (`tsc --noEmit`), and production build scripts configured and passing clean.
 - **Blockers**: None.
-- **Verification**: TBD.
+- **Verification**: `pnpm type-check` (exit code 0), `pnpm lint` (exit code 0), and `pnpm build` (exit code 0).
 
 ---
 
