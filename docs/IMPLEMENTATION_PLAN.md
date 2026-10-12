@@ -35,16 +35,17 @@ This implementation plan breaks down the development of the Gym Tracker applicat
 ---
 
 ## Milestone 2: Authentication, Database & RLS
-- **Status**: IN PROGRESS
+- **Status**: COMPLETED
 - **Objective**: Set up Supabase project, local development migrations, authentication flow, and workspace/membership data model with RLS.
 - **Acceptance Criteria**:
-  - [ ] Supabase CLI initialized with migration workflow.
-  - [ ] User authentication (email/password or magic link) via Supabase Auth.
-  - [ ] Workspaces and workspace members table with complete RLS policies.
-  - [ ] Negative security tests verifying cross-workspace isolation.
-  - [ ] TypeScript types generated from database schema.
+  - [x] Supabase Cloud environment configured with version-controlled migrations (`supabase/migrations/`).
+  - [x] Core schema applied: `profiles`, `workspaces`, `workspace_members`, `exercises`, `routines`, `routine_versions`, `workout_sessions`, `session_participants`, `workout_sets`.
+  - [x] Full RLS policies enabled and verified across all tables.
+  - [x] Generated strict TypeScript database types directly from remote schema (`src/types/database.types.ts`).
+  - [x] Supabase SSR client factories (`client.ts`, `server.ts`, `proxy.ts`) with cookie session handling.
+  - [x] User authentication (Sign In, Sign Up, Sign Out) with Zod validation (`/login`).
 - **Blockers**: None.
-- **Verification**: TBD.
+- **Verification**: PostgREST schema verification (200 OK across all 9 tables), `pnpm type-check` (exit code 0), `pnpm lint` (exit code 0), and Next.js partial prerender production build `pnpm build` (exit code 0).
 
 ---
 

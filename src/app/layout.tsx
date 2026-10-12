@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
+import { Suspense } from "react";
 import { MobileNavigation } from "@/components/layout/mobile-navigation";
+import { AuthHeaderButton } from "@/components/layout/auth-header-button";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -47,7 +49,9 @@ export default function RootLayout({
         <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-4 pb-20 md:pb-8">
           <header className="flex items-center justify-between border-b border-zinc-800 pb-3">
             <div className="flex items-center space-x-6">
-              <span className="text-lg font-bold tracking-tight">GYM TRACKER</span>
+              <Link href="/" className="text-lg font-bold tracking-tight hover:text-emerald-400 transition-colors">
+                GYM TRACKER
+              </Link>
               {/* Desktop Navigation Links */}
               <nav className="hidden md:flex items-center space-x-4 text-sm font-medium">
                 <Link href="/" className="text-zinc-200 hover:text-white transition-colors">Workout</Link>
@@ -57,9 +61,10 @@ export default function RootLayout({
                 <Link href="/settings" className="text-zinc-400 hover:text-white transition-colors">Settings</Link>
               </nav>
             </div>
-            <div className="flex items-center space-x-2 text-xs text-zinc-400">
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Ready</span>
+            <div className="flex items-center space-x-3 text-xs">
+              <Suspense fallback={<div className="h-7 w-16 animate-pulse rounded bg-zinc-800" />}>
+                <AuthHeaderButton />
+              </Suspense>
             </div>
           </header>
           <main className="flex-1 py-6">{children}</main>
