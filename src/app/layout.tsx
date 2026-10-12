@@ -72,7 +72,9 @@ export default function RootLayout({
         </div>
         {/* Mobile Navigation (Hidden on md/desktop screens) */}
         <div className="md:hidden">
-          <MobileNavigation />
+          <Suspense fallback={<div className="h-14 bg-zinc-950 border-t border-zinc-800" />}>
+            <MobileNavigation />
+          </Suspense>
         </div>
       </body>
     </html>

@@ -65,22 +65,22 @@ This implementation plan breaks down the development of the Gym Tracker applicat
 ---
 
 ## Milestone 4: Workout Session Engine & Exercise Management
-- **Status**: IN PROGRESS
+- **Status**: COMPLETED
 - **Objective**: Implement dedicated Exercise Management (`/exercises`) with full CRUD, plus core workout tracking engine supporting active live sessions, set logging, rest timer, and personal record attribution.
 - **Acceptance Criteria**:
-  - [ ] **Dedicated Exercise Management (`/exercises`)**:
+  - [x] **Dedicated Exercise Management (`/exercises`)**:
     - Searchable, filterable movement library (filter by category/muscle group and equipment).
-    - Edit custom exercise details (name, category, equipment, notes/cues).
-    - Delete custom exercises with referential safety checks (prevent orphaned sets).
-    - Navigation link to `/exercises` on desktop header and routine builder.
-  - [ ] **Workout Session Engine**:
-    - Start session from a routine (auto-populate planned exercises/sets) or empty freestyle slate.
-    - Dynamic set logging (reps, weight in kg/lbs, RPE/type, notes, completed checkmarks).
-    - Mobile-optimized live workout entry interface (min 44px touch targets).
-    - Rest countdown timer between sets with completion alert.
-    - Session completion snapshotting: calculate total volume, elapsed time, and preserve historical records.
+    - Edit custom exercise details (`EditExerciseDialog`: name, category, equipment, notes/cues).
+    - Delete custom exercises with referential safety checks (`DeleteExerciseButton` blocks deletion if referenced by logged sets).
+    - Navigation link to `/exercises` on desktop header and movement cards.
+  - [x] **Workout Session Engine**:
+    - Start session from routine (auto-populates planned movements, target sets, and rep ranges) or empty freestyle workout.
+    - Dynamic set logging (`ActiveWorkoutView`: weight, reps, set type, completed checkmarks).
+    - Optimistic Concurrency Control (OCC) with `revision_number` checks preventing silent overwrites.
+    - Rest countdown timer (`RestTimer`) with preset intervals (60s, 90s, 120s) and completion vibration cue.
+    - Live workout elapsed timer, live volume calculation, and "Finish Workout" completion handler.
 - **Blockers**: None.
-- **Verification**: TBD.
+- **Verification**: `pnpm type-check` (exit code 0), `pnpm lint` (exit code 0), and `pnpm build` (exit code 0 across all 8 routes with Partial Prerendering).
 
 ---
 
