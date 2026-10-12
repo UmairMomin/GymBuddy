@@ -7,16 +7,17 @@ This implementation plan breaks down the development of the Gym Tracker applicat
 ---
 
 ## Milestone 0: Repository Audit & Planning
-- **Status**: IN PROGRESS
+- **Status**: COMPLETED
 - **Objective**: Establish project instruction structure, inspect repository status, and set up project tracking.
 - **Acceptance Criteria**:
   - [x] Create `AGENTS.md` root instruction file (< 125 lines).
   - [x] Verify `docs/MASTER_SPEC.md` is preserved and authoritative.
   - [x] Create `.agents/rules/` (`engineering.md`, `database.md`, `realtime.md`) with valid frontmatter.
   - [x] Initialize `docs/AGENT_NOTES.md` and `docs/IMPLEMENTATION_PLAN.md`.
-  - [ ] Initialize Git repository if uninitialized.
+  - [x] Initialize Git repository and standard `.gitignore`.
+  - [x] Audit developer environment (Node, package manager, Supabase, Docker).
 - **Blockers**: None.
-- **Verification**: Directory structure inspection and rule frontmatter validation completed.
+- **Verification**: Git initialized on branch `main` (commit `c9078c9`), environment tooling audited, files verified.
 
 ---
 
