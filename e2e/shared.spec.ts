@@ -38,7 +38,9 @@ test("shared workout: link, invite, join, log together, edit each other, finish"
   await banner.getByRole("button", { name: "Join" }).click();
   await expect(B).toHaveURL(sessionUrl);
   await expect(B.getByRole("heading", { name: /barbell bench press/i })).toBeVisible();
-  await expect(A.getByText(new RegExp(`${guestName} (is here|· not connected)`))).toBeVisible({ timeout: 30_000 });
+  // The host's screen picks up the joined buddy: the All / Mine / buddy bar appears
+  await expect(A.getByRole("group", { name: "Show sets" })).toBeVisible({ timeout: 30_000 });
+  await expect(A.getByRole("button", { name: `Show ${guestName}'s sets` })).toBeVisible();
 
   // ---- live logging, both directions ------------------------------------------------------------
   // Default view is "All": your own rows, plus a one-line summary of the buddy's sets.
