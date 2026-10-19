@@ -276,11 +276,8 @@ function ExerciseCard({
   return (
     <section aria-label={ex.name} className="rounded-[18px] border border-zinc-800 bg-zinc-900 p-3.5">
       <div className="mb-2.5 flex items-start justify-between gap-2">
-        <button type="button" aria-expanded onClick={onToggle} className="min-w-0 flex-1 text-left">
-          <span className="flex items-center gap-1.5">
-            <span className="truncate font-display text-[22px] font-bold uppercase leading-tight tracking-wide">{ex.name}</span>
-            <ChevronUp aria-hidden className="h-5 w-5 shrink-0 text-zinc-400" />
-          </span>
+        <button type="button" aria-expanded onClick={onToggle} className="min-w-0 flex-1 py-1 text-left">
+          <span className="block break-words font-display text-xl font-bold uppercase leading-[1.1] tracking-normal">{ex.name}</span>
           {ex.last.length > 0 ? (
             <span className="block text-xs text-zinc-400">
               Last time: {ex.last.map((l) => `${fmt(toPreferredWeight(l.weight_kg, unit))}×${l.reps}`).join(", ")} {unit}
@@ -289,10 +286,11 @@ function ExerciseCard({
             reps && <span className="block text-xs text-zinc-400">Target: {ex.target_sets} × {reps}</span>
           )}
         </button>
-        <div className="flex shrink-0 items-center gap-1">
+        {/* right to left: collapse, options, sets pill */}
+        <div className="flex shrink-0 items-center gap-0.5">
           <span
             className={cn(
-              "rounded-full border bg-zinc-950 px-2.5 py-0.5 font-display text-xs font-bold uppercase tracking-wider",
+              "mr-1 rounded-full border bg-zinc-950 px-2.5 py-0.5 font-display text-xs font-bold uppercase tracking-wider",
               view === "sam" ? "border-[#a8cbff] text-sky-300" : "border-emerald-500 text-emerald-400"
             )}
           >
@@ -300,6 +298,9 @@ function ExerciseCard({
           </span>
           <Button variant="ghost" size="icon" aria-label={`Options for ${ex.name}`} onClick={onMenu}>
             <MoreHorizontal className="h-5 w-5 text-zinc-400" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label={`Collapse ${ex.name}`} aria-expanded onClick={onToggle}>
+            <ChevronUp className="h-5 w-5 text-zinc-400" />
           </Button>
         </div>
       </div>
