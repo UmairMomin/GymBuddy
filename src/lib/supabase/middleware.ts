@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isAuthCookieName, isDeadSessionError } from "@/lib/supabase/session-errors";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -33,7 +34,17 @@ export async function updateSession(request: NextRequest) {
   // issues with users being randomly logged out.
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser();
+
+  // A cookie from a deleted account / revoked session can never refresh. Drop it (for this request and the
+  // browser) and carry on as signed-out, instead of retrying and logging the same error on every request.
+  if (!user && isDeadSessionError(error)) {
+    const stale = request.cookies.getAll().filter((c) => isAuthCookieName(c.name));
+    stale.forEach((c) => request.cookies.delete(c.name));
+    supabaseResponse = NextResponse.next({ request });
+    stale.forEach((c) => supabaseResponse.cookies.set(c.name, "", { path: "/", maxAge: 0 }));
+  }
 
   return { supabaseResponse, user };
 }
