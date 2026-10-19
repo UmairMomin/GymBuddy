@@ -281,7 +281,6 @@ export type Database = {
           position: number
           rep_max: number | null
           rep_min: number | null
-          rest_seconds: number | null
           session_id: string
           skipped: boolean
           target_sets: number
@@ -294,7 +293,6 @@ export type Database = {
           position: number
           rep_max?: number | null
           rep_min?: number | null
-          rest_seconds?: number | null
           session_id: string
           skipped?: boolean
           target_sets?: number
@@ -307,7 +305,6 @@ export type Database = {
           position?: number
           rep_max?: number | null
           rep_min?: number | null
-          rest_seconds?: number | null
           session_id?: string
           skipped?: boolean
           target_sets?: number

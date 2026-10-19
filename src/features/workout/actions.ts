@@ -61,7 +61,6 @@ export type SessionExerciseView = {
   target_sets: number;
   rep_min: number | null;
   rep_max: number | null;
-  rest_seconds: number | null;
   skipped: boolean;
   sets: SetRow[];
   last: LastTimeSet[];
@@ -266,7 +265,7 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
       .maybeSingle(),
     supabase
       .from("session_exercises")
-      .select("id, exercise_id, position, target_sets, rep_min, rep_max, rest_seconds, skipped, exercises(name, category)")
+      .select("id, exercise_id, position, target_sets, rep_min, rep_max, skipped, exercises(name, category)")
       .eq("session_id", sessionId)
       .eq("user_id", user.id)
       .order("position", { ascending: true }),
@@ -333,7 +332,6 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
       target_sets: l.target_sets,
       rep_min: l.rep_min,
       rep_max: l.rep_max,
-      rest_seconds: l.rest_seconds,
       skipped: l.skipped,
       sets: sets.filter((s) => s.exercise_id === l.exercise_id),
       last: lastByExercise.get(l.exercise_id) ?? [],
@@ -445,7 +443,7 @@ export async function addExerciseToWorkoutAction(
 
   const { data, error } = await supabase
     .from("session_exercises")
-    .insert({ session_id: sessionId, user_id: user.id, exercise_id: exerciseId, position, target_sets: 3, rest_seconds: 90 })
+    .insert({ session_id: sessionId, user_id: user.id, exercise_id: exerciseId, position, target_sets: 3 })
     .select("id, position")
     .single();
   if (error || !data) return { error: "Couldn't add that exercise" };
@@ -677,4 +675,24 @@ export async function inviteBuddyAction(sessionId: string): Promise<ActionResult
 async function notifyInvitedBuddy(supabase: Supa, hostId: string, sessionId: string, sessionName: string) {
   const { data: me } = await supabase.from("profiles").select("display_name").eq("id", hostId).maybeSingle();
   await sendInvitePush(supabase, sessionId, me?.display_name ?? "Your buddy", sessionName);
+}
+
+export type ActiveWorkoutInfo = { id: string; name: string; startedAt: string };
+
+/** My live workout, if any (host or joined participant). Cheap enough to call on every navigation. */
+export async function getActiveWorkoutAction(): Promise<ActiveWorkoutInfo | null> {
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("session_participants")
+    .select("workout_sessions!inner(id, name, status, started_at)")
+    .eq("user_id", user.id)
+    .eq("status", "joined")
+    .eq("workout_sessions.status", "in_progress")
+    .limit(1);
+  const row = data?.[0]?.workout_sessions;
+  const s = Array.isArray(row) ? row[0] : row;
+  return s ? { id: s.id, name: s.name, startedAt: s.started_at } : null;
 }

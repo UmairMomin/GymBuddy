@@ -25,7 +25,6 @@ export type PlanRoutineItem = {
   target_sets: number;
   rep_min: number;
   rep_max: number;
-  rest_seconds: number;
 };
 
 export type PlanRoutine = {
@@ -61,7 +60,6 @@ function toItems(json: unknown): PlanRoutineItem[] {
         target_sets: r.target_sets ?? 3,
         rep_min: r.rep_min ?? 8,
         rep_max: r.rep_max ?? 12,
-        rest_seconds: r.rest_seconds ?? 90,
       };
     })
     .filter((x): x is PlanRoutineItem => x !== null)

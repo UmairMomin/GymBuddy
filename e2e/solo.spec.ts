@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { loadStarterPlan, logSet, newPlayer, startPush } from "./helpers/app";
+import { finishWorkout, loadStarterPlan, logSet, newPlayer, startPush } from "./helpers/app";
 
 test("solo: plan, log a workout with placeholders, finish, history, edit after finish", async ({ browser }) => {
   const { page, context } = await newPlayer(browser, "solo");
@@ -14,7 +14,8 @@ test("solo: plan, log a workout with placeholders, finish, history, edit after f
   await startPush(page);
   await expect(page.getByRole("heading", { name: /barbell bench press/i })).toBeVisible();
   await logSet(page, "Your", 1, "60", "8");
-  await expect(page.getByRole("timer", { name: /rest timer/i })).toBeVisible();
+  // No rest timer: logging a set never starts one
+  await expect(page.getByRole("timer")).toHaveCount(0);
   await expect(page.getByLabel(/^Your set 2 weight/)).toHaveAttribute("placeholder", "60");
   await page.getByRole("button", { name: /^Log Your set 2$/ }).click();
   await expect(page.getByRole("button", { name: /^Your set 2 logged/ })).toBeVisible();
@@ -24,9 +25,18 @@ test("solo: plan, log a workout with placeholders, finish, history, edit after f
   await expect(page.getByLabel(/^Your set 1 weight/)).toHaveValue("60");
   await expect(page.getByLabel(/^Your set 2 reps/)).toHaveValue("8");
 
+  // Leaving the workout shows the "in progress" bar on other pages, and Resume returns to it
+  await page.getByRole("link", { name: "Plan" }).click();
+  await expect(page).toHaveURL(/\/plan/);
+  const bar = page.getByRole("region", { name: "Workout in progress" });
+  await expect(bar).toBeVisible({ timeout: 20_000 });
+  await expect(bar).toContainText("Push");
+  await bar.getByRole("link", { name: "Resume" }).click();
+  await expect(page).toHaveURL(/\/session\//);
+  await expect(page.getByRole("region", { name: "Workout in progress" })).toHaveCount(0); // hidden on the workout itself
+
   // Finish
-  await page.getByRole("button", { name: "Finish", exact: true }).click();
-  await page.getByRole("button", { name: "Finish workout" }).click();
+  await finishWorkout(page);
   await expect(page.getByRole("heading", { name: "Today" })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Push").first()).toBeVisible();
 

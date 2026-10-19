@@ -4,7 +4,6 @@ import * as React from "react";
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import type { SetRow } from "@/features/workout/actions";
-import { parseRestBroadcast } from "@/features/workout/sync";
 
 export type ConnectionStatus = "connecting" | "live" | "reconnecting";
 
@@ -20,12 +19,11 @@ type Handlers = {
   onRosterChange: () => void;
   /** Connection (re)established: fetch an authoritative snapshot. */
   onResync: () => void;
-  onRest: (rest: { endsAt: number; total: number } | null) => void;
 };
 
 /**
  * One private Realtime channel per session (`session:<id>`), authorized by RLS on realtime.messages so
- * only the session's members can join. Carries row changes, presence and the shared rest timer.
+ * only the session's members can join. Carries row changes and presence.
  * State is never trusted from the wire alone: every (re)connect triggers `onResync`.
  */
 export function useSessionRealtime(
@@ -54,7 +52,7 @@ export function useSessionRealtime(
       if (cancelled) return;
 
       channel = supabase.channel(`session:${sessionId}`, {
-        config: { private: true, presence: { key: userId }, broadcast: { self: false } },
+        config: { private: true, presence: { key: userId } },
       });
 
       channel
@@ -80,7 +78,6 @@ export function useSessionRealtime(
           { event: "UPDATE", schema: "public", table: "workout_sessions", filter: `id=eq.${sessionId}` },
           () => handlers.current.onRosterChange()
         )
-        .on("broadcast", { event: "rest" }, ({ payload }) => handlers.current.onRest(parseRestBroadcast(payload)))
         .on("presence", { event: "sync" }, () => {
           const state = channel?.presenceState<{ userId: string; name: string; exerciseId: string | null }>() ?? {};
           const others = Object.values(state)
@@ -119,9 +116,6 @@ export function useSessionRealtime(
     [userId, name]
   );
 
-  const sendRest = React.useCallback((rest: { endsAt: number; total: number } | null) => {
-    void channelRef.current?.send({ type: "broadcast", event: "rest", payload: rest ?? {} });
-  }, []);
 
-  return { status, peers, track, sendRest };
+  return { status, peers, track };
 }

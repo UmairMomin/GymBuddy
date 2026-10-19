@@ -38,7 +38,6 @@ export const routineItemSchema = z
     target_sets: z.number().int().min(1, "At least 1 set").max(20),
     rep_min: z.number().int().min(1).max(100),
     rep_max: z.number().int().min(1).max(100),
-    rest_seconds: z.number().int().min(0).max(600),
   })
   .refine((v) => v.rep_max >= v.rep_min, { message: "Max reps can't be below min reps", path: ["rep_max"] });
 

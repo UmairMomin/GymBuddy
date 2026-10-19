@@ -6,6 +6,7 @@ import { MobileNavigation } from "@/components/layout/mobile-navigation";
 import { DesktopNavigation } from "@/components/layout/desktop-navigation";
 import { UserMenu } from "@/components/layout/user-menu";
 import { ServiceWorkerRegister } from "@/features/notifications/components/service-worker-register";
+import { ActiveWorkoutBar } from "@/features/workout/components/active-workout-bar";
 import { InviteBanner } from "@/features/workout/components/invite-banner";
 import { NetworkStatusIndicator } from "@/components/layout/network-status-indicator";
 import { ThemeScript, ThemeSync } from "@/components/layout/theme-script";
@@ -65,7 +66,7 @@ export default function RootLayout({
           <InviteBanner />
         </Suspense>
         <div className="pt-safe">
-          <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8">
+          <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-3 pb-[calc(5.5rem+var(--wip-bar,0px)+env(safe-area-inset-bottom))] md:pb-[calc(2rem+var(--wip-bar,0px))]">
             <header className="flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">
               <div className="flex items-center gap-6">
                 <Link
@@ -87,6 +88,9 @@ export default function RootLayout({
             <main className="flex-1 py-5 md:py-6">{children}</main>
           </div>
         </div>
+        <Suspense fallback={null}>
+          <ActiveWorkoutBar />
+        </Suspense>
         {/* Mobile Navigation (hidden on md/desktop) */}
         <div className="md:hidden">
           <Suspense fallback={<div className="fixed inset-x-0 bottom-0 h-16 border-t border-zinc-800 bg-zinc-950" />}>

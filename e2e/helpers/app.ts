@@ -65,3 +65,9 @@ export async function logSet(page: Page, who: string, n: number, weight: string,
   await page.getByLabel(new RegExp(`^${who} set ${n} reps`)).fill(reps);
   await page.getByRole("button", { name: new RegExp(`^Log ${who} set ${n}$`) }).click();
 }
+
+/** Finish the workout from the bottom button and confirm in the sheet. */
+export async function finishWorkout(page: Page) {
+  await page.getByRole("button", { name: "Finish workout" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: /^Finish (my )?workout$/ }).click();
+}

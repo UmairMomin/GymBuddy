@@ -10,6 +10,7 @@
 
 - The user trains **6 days a week**: Push, Pull, Legs, Push, Pull, Shoulders+Arms (Sun rest). The split is **fully customizable**; it can change at any time.
 - It is a **solo tracker first**. The user can optionally bring **one friend (buddy)** into a workout so both log in the same live session.
+- Live workout screen (Option 1): the header holds the **All / Mine / <buddy>** bar. *All* shows your rows plus a one-line summary of the buddy's sets (tap it to open and correct them), *Mine* only yours, *<buddy>* their full rows.
 - Primary device: **iPhone**, used in the gym. Delivered as an **installable PWA** (Safari → Add to Home Screen). No native app, no App Store, no Apple developer fee. Desktop remains supported for planning and review.
 - Core moment: open the app → tap today's routine → log sets (with buddy if present) → finish.
 
@@ -26,6 +27,7 @@ Keep (do not cut): kg/lb preference, scheduling, body metrics, exercise catalog,
 
 ## 3. Information architecture
 
+- **In-progress bar**: while a workout is live, every page except the workout itself shows a "Workout in progress" bar above the bottom nav with the elapsed time and a **Resume** button.
 - **Today** (home): scheduled routine for today, exercise preview, "Train with buddy" toggle, Start / Resume, week strip, recent sessions.
 - **Plan**: segmented *Schedule | Routines | Exercises*. Weekly schedule maps weekday → routine (Sun = rest by default). Routine builder sets name, **days it runs on**, exercises and target sets; exercises are added from the catalog or created inline.
 - **History**: past sessions, personal records, volume/1RM charts, body metrics, exports.
@@ -40,7 +42,7 @@ Keep (do not cut): kg/lb preference, scheduling, body metrics, exercise catalog,
 4. **Mutual editing**: either participant may edit any set in the session, **including after the session is finished** (no locking). Each set records `last_edited_by`; the UI shows who edited. Totals and PRs recompute on edit. Conflicts are detected with `revision_number`; no silent overwrites.
 5. **Visibility**: the buddy sees **only sessions done together**. Solo workouts, analytics and body metrics are private (enforced by RLS, not just UI).
 6. **Set entry**: last-time values appear as grey **placeholders** in empty inputs. Logging a set requires typing values or an explicit confirm tap (which accepts the placeholder values).
-7. **Rest timer**: starts on set completion. In a shared session it is **shared**; stored as a start timestamp, rendered locally.
+7. **No rest timer.** Rest between sets is not tracked: no timer starts when a set is logged, and routines have no rest setting.
 8. **Units**: canonical storage in kg; display per user preference.
 
 ## 5. Live buddy system

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRestBroadcast, reconcile, shouldAdopt } from "@/features/workout/sync";
+import { reconcile, shouldAdopt } from "@/features/workout/sync";
 
 describe("shouldAdopt", () => {
   it("adopts anything when nothing is known", () => {
@@ -65,19 +65,5 @@ describe("reconcile", () => {
   it("adopts a row we only know as unsaved once the server has it", () => {
     const r = reconcile([{ id: "a", saved: false, revision: null }], [{ id: "a", revision_number: 1 }], none);
     expect(r.adopt).toEqual(["a"]);
-  });
-});
-
-describe("parseRestBroadcast", () => {
-  it("accepts a valid payload", () => {
-    expect(parseRestBroadcast({ endsAt: 1_800_000_000_000, total: 90 })).toEqual({ endsAt: 1_800_000_000_000, total: 90 });
-  });
-  it("rejects malformed or out-of-range payloads", () => {
-    expect(parseRestBroadcast(null)).toBeNull();
-    expect(parseRestBroadcast({})).toBeNull();
-    expect(parseRestBroadcast({ endsAt: "x", total: 90 })).toBeNull();
-    expect(parseRestBroadcast({ endsAt: Infinity, total: 90 })).toBeNull();
-    expect(parseRestBroadcast({ endsAt: 1, total: 0 })).toBeNull();
-    expect(parseRestBroadcast({ endsAt: 1, total: 99999 })).toBeNull();
   });
 });

@@ -11,7 +11,7 @@ import { ExerciseFormSheet, labelize } from "@/features/plan/components/exercise
 import { randomUUID } from "@/lib/uuid";
 import { cn } from "@/lib/utils";
 
-type Item = { exercise_id: string; target_sets: number; rep_min: number; rep_max: number; rest_seconds: number };
+type Item = { exercise_id: string; target_sets: number; rep_min: number; rep_max: number };
 
 const numberInput =
   "h-11 w-full rounded-xl border-0 bg-zinc-950 text-center text-base font-bold text-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400";
@@ -49,7 +49,6 @@ function RoutineBuilder({ open, onClose, routine, routines, exercises, schedule,
       target_sets: i.target_sets,
       rep_min: i.rep_min,
       rep_max: i.rep_max,
-      rest_seconds: i.rest_seconds,
     }))
   );
   const [weekdays, setWeekdays] = React.useState<number[]>(routine?.weekdays ?? []);
@@ -79,7 +78,7 @@ function RoutineBuilder({ open, onClose, routine, routines, exercises, schedule,
   const routineNameById = React.useMemo(() => new Map(routines.map((r) => [r.id, r.name])), [routines]);
 
   function addExercise(id: string) {
-    setItems((prev) => [...prev, { exercise_id: id, target_sets: 3, rep_min: 8, rep_max: 12, rest_seconds: 90 }]);
+    setItems((prev) => [...prev, { exercise_id: id, target_sets: 3, rep_min: 8, rep_max: 12 }]);
   }
   function patch(index: number, change: Partial<Item>) {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...change } : it)));
@@ -246,7 +245,7 @@ function RoutineBuilder({ open, onClose, routine, routines, exercises, schedule,
                           </button>
                         </div>
                       </div>
-                      <div className="mt-2 grid grid-cols-4 gap-2 text-center text-[11px] font-semibold text-zinc-400">
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-center text-[11px] font-semibold text-zinc-400">
                         <label className="space-y-1">
                           <span>Sets</span>
                           <input inputMode="numeric" className={numberInput} value={it.target_sets} onChange={(e) => patch(index, { target_sets: clampInt(e.target.value, 1, 20, it.target_sets) })} />
@@ -258,10 +257,6 @@ function RoutineBuilder({ open, onClose, routine, routines, exercises, schedule,
                         <label className="space-y-1">
                           <span>Reps max</span>
                           <input inputMode="numeric" className={numberInput} value={it.rep_max} onChange={(e) => patch(index, { rep_max: clampInt(e.target.value, 1, 100, it.rep_max) })} />
-                        </label>
-                        <label className="space-y-1">
-                          <span>Rest (s)</span>
-                          <input inputMode="numeric" className={numberInput} value={it.rest_seconds} onChange={(e) => patch(index, { rest_seconds: clampInt(e.target.value, 0, 600, it.rest_seconds) })} />
                         </label>
                       </div>
                     </li>

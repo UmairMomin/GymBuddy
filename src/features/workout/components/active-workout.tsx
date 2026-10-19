@@ -23,7 +23,7 @@ import {
   type SetRow,
   type WorkoutData,
 } from "@/features/workout/actions";
-import { RestTimerDock, formatClock, useNow, type RestState } from "@/features/workout/components/rest-timer-dock";
+import { formatClock, useNow } from "@/lib/clock";
 import {
   matchEntryToRow,
   nextStamp,
@@ -127,7 +127,7 @@ function SetRowView({
   onToggle,
 }: {
   row: Row;
-  /** What the set badge shows (a number for you, the buddy's initial for their lane). */
+  /** What the set badge shows. */
   label: string;
   /** The set's number, for assistive tech and tests. */
   number: number;
@@ -141,16 +141,15 @@ function SetRowView({
   onToggle: () => void;
 }) {
   const partner = tone === "partner";
+  // Accent per person: your theme accent, or the sky blue used for your buddy.
   const accent = partner
-    ? { text: "text-sky-300", border: "border-[#a8cbff]", doneBg: "bg-[#a8cbff]/25", fill: "border-[#a8cbff] bg-[#a8cbff] text-[#1e1e22]", ring: "border-[#a8cbff] text-sky-300" }
-    : { text: "text-emerald-400", border: "border-emerald-500", doneBg: "bg-emerald-500/15", fill: "border-emerald-500 bg-emerald-500 text-accent-ink", ring: "border-emerald-500 text-emerald-400" };
+    ? { text: "text-sky-300", border: "border-[#a8cbff]", fill: "border-[#a8cbff] bg-[#a8cbff] text-[#1e1e22]", ring: "focus-visible:ring-[#a8cbff]" }
+    : { text: "text-emerald-400", border: "border-emerald-500", fill: "border-emerald-500 bg-emerald-500 text-accent-ink", ring: "focus-visible:ring-emerald-400" };
 
   return (
     <div>
-      <div className="grid grid-cols-[1.75rem_1fr_1fr_3.25rem] items-center gap-2.5">
-        <span className={cn("text-center text-sm font-bold", row.completed ? accent.text : partner ? "text-sky-300/80" : "text-zinc-300")}>
-          {label}
-        </span>
+      <div className="grid grid-cols-[34px_minmax(0,1fr)_minmax(0,1fr)_48px] items-center gap-2">
+        <span className={cn("text-center font-display text-lg font-bold", isNext ? accent.text : "text-zinc-400")}>{label}</span>
         {(["weight", "reps"] as const).map((field) => (
           <input
             key={field}
@@ -161,13 +160,13 @@ function SetRowView({
             onChange={(e) => onField(field, e.target.value)}
             onBlur={onBlur}
             className={cn(
-              "w-full min-w-0 rounded-2xl border-2 text-center font-bold tabular-nums placeholder:font-semibold placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2",
-              partner ? "h-11 text-lg focus-visible:ring-[#a8cbff]" : "h-[52px] text-xl focus-visible:ring-emerald-400",
+              "h-[46px] w-full min-w-0 rounded-xl border text-center font-display text-2xl font-bold tabular-nums placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2",
+              accent.ring,
               row.completed
-                ? cn("border-transparent text-zinc-50", accent.doneBg)
+                ? "border-zinc-800/60 bg-zinc-900 text-zinc-400"
                 : isNext
                   ? cn("bg-zinc-950 text-zinc-50", accent.border)
-                  : "border-transparent bg-zinc-800/70 text-zinc-50"
+                  : "border-zinc-800 bg-zinc-950 text-zinc-50"
             )}
           />
         ))}
@@ -177,19 +176,22 @@ function SetRowView({
           aria-label={row.completed ? `${who} set ${number} logged, tap to undo` : `Log ${who} set ${number}`}
           aria-pressed={row.completed}
           className={cn(
-            "flex items-center justify-center rounded-2xl border-2 transition-transform active:scale-95",
-            partner ? "h-11 w-[3.25rem]" : "h-[52px] w-[52px]",
-            row.completed ? accent.fill : isNext ? accent.ring : "border-transparent bg-zinc-800/70 text-zinc-400"
+            "flex h-[46px] w-12 items-center justify-center rounded-xl border transition-transform active:scale-95",
+            row.completed
+              ? accent.fill
+              : isNext
+                ? cn("bg-zinc-950", accent.border, accent.text)
+                : "border-zinc-800 bg-zinc-950 text-zinc-600"
           )}
         >
-          <Check className="h-6 w-6 stroke-[3]" />
+          <Check className="h-5 w-5 stroke-[3]" />
         </button>
       </div>
-      {row.error && <p role="alert" className="mt-1 pl-9 text-xs text-red-400">{row.error}</p>}
+      {row.error && <p role="alert" className="mt-1 pl-[42px] text-xs text-red-400">{row.error}</p>}
       {row.queued && !row.error && (
-        <p className="mt-0.5 pl-9 text-[11px] text-amber-400">Saved on this device · will sync when you&rsquo;re back online</p>
+        <p className="mt-0.5 pl-[42px] text-[11px] text-amber-400">Saved on this device · will sync when you&rsquo;re back online</p>
       )}
-      {row.editedBy && !row.error && !row.queued && <p className="mt-0.5 pl-9 text-[11px] text-zinc-500">edited by {row.editedBy}</p>}
+      {row.editedBy && !row.error && !row.queued && <p className="mt-0.5 pl-[42px] text-[11px] text-zinc-500">edited by {row.editedBy}</p>}
     </div>
   );
 }
@@ -235,7 +237,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     const i = data.exercises.findIndex((e) => !e.skipped && e.sets.filter((s) => s.completed).length < e.target_sets);
     return i === -1 ? 0 : i;
   });
-  const [rest, setRest] = React.useState<RestState | null>(null);
+  const [filter, setFilter] = React.useState<"all" | "me" | "sam">("all");
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
   const [finishOpen, setFinishOpen] = React.useState(false);
@@ -462,12 +464,6 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     };
   }, []);
 
-  function startRest(seconds: number) {
-    const next = { endsAt: nowMs() + seconds * 1000, total: seconds };
-    setRest(next);
-    realtime.sendRest(next);
-  }
-
   function toggleComplete(e: ExerciseState, lane: Lane, index: number) {
     const rows = lane === "me" ? e.rows : e.partnerRows;
     const row = rows[index];
@@ -487,7 +483,6 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     const filled = { ...row, weight: row.weight || ph.weight, reps: row.reps || ph.reps, completed: true, error: null };
     patchRow(e.id, row.id, filled);
     persist(e, filled, { weight, reps, completed: true });
-    if (live && lane === "me") startRest(e.rest_seconds ?? 90);
   }
 
   function commitEdit(e: ExerciseState, row: Row) {
@@ -545,7 +540,6 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         target_sets: 3,
         rep_min: null,
         rep_max: null,
-        rest_seconds: 90,
         skipped: false,
         rows,
         partnerRows: partner ? padLane([], partner.userId, rows.length) : [],
@@ -635,7 +629,6 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     onSetChange,
     onRosterChange: () => void resync(),
     onResync: () => void resync(),
-    onRest: setRest,
   });
 
   const currentExerciseId = ex?.exercise_id ?? null;
@@ -645,7 +638,6 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   }, [track, currentExerciseId]);
 
   const peer = realtime.peers[0] ?? null;
-  const peerExercise = peer ? exercises.find((e) => e.exercise_id === peer.exerciseId)?.name : undefined;
 
   // ---- session actions --------------------------------------------------------------------------
   function shareInvite() {
@@ -713,52 +705,88 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
 
   const unitLabel = unit.toUpperCase();
   const partnerName = partner?.name ?? "";
+  const partnerFirst = partnerName.split(" ")[0] || partnerName;
+  /** Which lane the card shows. Without a buddy in the workout there is only "all" (your own sets). */
+  const view: "all" | "me" | "sam" = partner ? filter : "all";
+  const segments: Array<{ id: "all" | "me" | "sam"; label: string; aria: string }> = [
+    { id: "all", label: "All", aria: "Show all sets" },
+    { id: "me", label: "Mine", aria: "Show my sets" },
+    { id: "sam", label: partnerFirst, aria: `Show ${partnerName}'s sets` },
+  ];
+  const statusLine = !live
+    ? sessionState.status === "completed" ? "Completed" : "Discarded"
+    : !partner
+      ? "Live"
+      : realtime.status === "reconnecting"
+        ? "Reconnecting…"
+        : peer
+          ? `Live · You + ${partnerFirst}`
+          : `${partnerFirst} · not connected`;
+  const lane = ex ? (view === "sam" ? ex.partnerRows : ex.rows) : [];
+  const laneTone: Lane = view === "sam" ? "partner" : "me";
+  const laneWho = view === "sam" ? `${partnerName}'s` : "Your";
+  const theirDone = ex ? ex.partnerRows.filter((r) => r.completed) : [];
+  const pill = !ex
+    ? ""
+    : view === "sam"
+      ? `${theirDone.length} / ${ex.partnerRows.length} sets`
+      : `${ex.rows.filter((r) => r.completed).length} / ${ex.rows.length} sets`;
 
   return (
-    <div className="mx-auto w-full max-w-xl pb-44">
-      {/* header */}
-      <header className="flex items-center gap-3 pb-3">
-        <Link
-          href="/"
-          aria-label="Back to Today"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-zinc-900 text-zinc-100 hover:bg-zinc-800"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </Link>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate font-display text-2xl font-extrabold uppercase leading-tight tracking-wide">{session.name}</h1>
-          <p className="text-xs tabular-nums text-zinc-400" suppressHydrationWarning>
-            {live ? formatClock(elapsed) : `${sessionState.status === "completed" ? "Completed" : "Discarded"} · ${formatClock(elapsed)}`}
-          </p>
+    <div className="mx-auto w-full max-w-xl pb-28">
+      {/* header: title, live status, clock; the All / Mine / Sam bar when training with someone */}
+      <header className="mb-3.5 space-y-3 border-b border-zinc-800 pb-3">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            aria-label="Back to Today"
+            className="-ml-2.5 flex h-11 w-11 shrink-0 items-center justify-center text-zinc-100"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Link>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate font-display text-[28px] font-extrabold uppercase leading-none tracking-wide">{session.name}</h1>
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-zinc-400">
+              <span
+                aria-hidden
+                className={cn("h-[7px] w-[7px] shrink-0 rounded-full", live && (!partner || (realtime.status === "live" && peer)) ? "bg-emerald-500" : "bg-zinc-600")}
+              />
+              <span className="truncate">{statusLine}</span>
+            </p>
+          </div>
+          <div className="font-display text-3xl font-bold tabular-nums text-emerald-400" suppressHydrationWarning>
+            {formatClock(elapsed)}
+          </div>
         </div>
-        {live && (
-          <Button className="h-11 rounded-2xl px-5" onClick={() => setFinishOpen(true)}>
-            Finish
-          </Button>
+        {partner && (
+          <div role="group" aria-label="Show sets" className="grid grid-cols-3 rounded-xl bg-zinc-900 p-[3px]">
+            {segments.map((seg) => (
+              <button
+                key={seg.id}
+                type="button"
+                aria-pressed={view === seg.id}
+                aria-label={seg.aria}
+                onClick={() => setFilter(seg.id)}
+                className={cn(
+                  "h-9 min-w-0 truncate rounded-[9px] px-2 font-display text-[15px] font-bold uppercase tracking-wider transition-colors",
+                  view === seg.id
+                    ? seg.id === "sam"
+                      ? "bg-[#a8cbff] text-[#1e1e22]"
+                      : "bg-emerald-500 text-accent-ink"
+                    : "text-zinc-400 hover:text-zinc-50"
+                )}
+              >
+                {seg.label}
+              </button>
+            ))}
+          </div>
         )}
       </header>
 
-      {/* buddy presence / invite */}
-      {live && (partner || invited || (session.isHost && data.buddy)) && (
-        <div
-          role="status"
-          className="mb-3 flex items-center gap-3 rounded-2xl bg-[#a8cbff]/15 px-3.5 py-2.5 text-sm text-zinc-100"
-        >
-          {partner ? (
-            <>
-              <span
-                aria-hidden
-                className={cn("h-2 w-2 shrink-0 rounded-full", realtime.status === "live" && peer ? "bg-[#a8cbff]" : "bg-zinc-500")}
-              />
-              <span className="min-w-0 flex-1 truncate">
-                {realtime.status === "reconnecting"
-                  ? "Reconnecting…"
-                  : peer
-                    ? `${partnerName} is here · live${peerExercise ? ` · ${peerExercise}` : ""}`
-                    : `${partnerName} · not connected`}
-              </span>
-            </>
-          ) : invited ? (
+      {/* waiting for / inviting a buddy */}
+      {live && !partner && (invited || (session.isHost && data.buddy)) && (
+        <div role="status" className="mb-3 flex items-center gap-3 rounded-2xl bg-[#a8cbff]/15 px-3.5 py-2.5 text-sm text-zinc-100">
+          {invited ? (
             <>
               <span className="min-w-0 flex-1 truncate">Waiting for {invited.name} to join</span>
               <Button size="sm" variant="secondary" onClick={shareInvite}>
@@ -828,95 +856,101 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
           </nav>
 
           {ex && (
-            <section aria-label={ex.name} className="space-y-3 rounded-3xl bg-zinc-900 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                    Exercise {current + 1} of {exercises.length}
-                  </p>
-                  <h2 className="font-display text-3xl font-extrabold uppercase leading-tight tracking-wide">{ex.name}</h2>
-                  {ex.last.length > 0 ? (
-                    <p className="text-xs text-zinc-400">
-                      Last time:{" "}
-                      {ex.last.map((l) => `${fmt(toPreferredWeight(l.weight_kg, unit))}×${l.reps}`).join(", ")} {unit}
+              <section aria-label={ex.name} className="rounded-[18px] border border-zinc-800 bg-zinc-900 p-3.5">
+                <div className="mb-2.5 flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                      Exercise {current + 1} of {exercises.length}
                     </p>
-                  ) : (
-                    ex.rep_min != null && (
+                    <h2 className="font-display text-[22px] font-bold uppercase leading-tight tracking-wide">{ex.name}</h2>
+                    {ex.last.length > 0 ? (
                       <p className="text-xs text-zinc-400">
-                        Target: {ex.target_sets} × {ex.rep_min}
-                        {ex.rep_max && ex.rep_max !== ex.rep_min ? `–${ex.rep_max}` : ""}
+                        Last time: {ex.last.map((l) => `${fmt(toPreferredWeight(l.weight_kg, unit))}×${l.reps}`).join(", ")} {unit}
                       </p>
-                    )
-                  )}
-                </div>
-                <Button variant="ghost" size="icon" aria-label="Exercise options" onClick={() => setMenuOpen(true)}>
-                  <MoreHorizontal className="h-5 w-5 text-zinc-400" />
-                </Button>
-              </div>
-
-              {ex.skipped ? (
-                <div className="space-y-2 rounded-2xl border border-dashed border-zinc-700 p-4 text-center">
-                  <p className="text-sm text-zinc-400">Skipped for today.</p>
-                  <Button variant="secondary" onClick={() => toggleSkip(ex)}>Restore exercise</Button>
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-[1.75rem_1fr_1fr_3.25rem] gap-2.5 px-0.5 text-[11px] font-semibold text-zinc-400">
-                    <span>SET</span>
-                    <span className="text-center">{unitLabel}</span>
-                    <span className="text-center">REPS</span>
-                    <span />
+                    ) : (
+                      ex.rep_min != null && (
+                        <p className="text-xs text-zinc-400">
+                          Target: {ex.target_sets} × {ex.rep_min}
+                          {ex.rep_max && ex.rep_max !== ex.rep_min ? `–${ex.rep_max}` : ""}
+                        </p>
+                      )
+                    )}
                   </div>
-                  {partner && (
-                    <p className="flex gap-4 px-0.5 text-[11px] font-bold uppercase tracking-wider">
-                      <span className="text-emerald-400">● You</span>
-                      <span className="text-sky-300">● {partnerName}</span>
-                    </p>
-                  )}
-                  <ol className="space-y-3">
-                    {ex.rows.map((row, i) => {
-                      const theirs = partner ? ex.partnerRows[i] : undefined;
-                      return (
-                        <li key={row.id} className="space-y-1.5">
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span
+                      className={cn(
+                        "rounded-full border bg-zinc-950 px-2.5 py-0.5 font-display text-xs font-bold uppercase tracking-wider",
+                        view === "sam" ? "border-[#a8cbff] text-sky-300" : "border-emerald-500 text-emerald-400"
+                      )}
+                    >
+                      {pill}
+                    </span>
+                    <Button variant="ghost" size="icon" aria-label="Exercise options" onClick={() => setMenuOpen(true)}>
+                      <MoreHorizontal className="h-5 w-5 text-zinc-400" />
+                    </Button>
+                  </div>
+                </div>
+
+                {ex.skipped ? (
+                  <div className="space-y-2 rounded-2xl border border-dashed border-zinc-700 p-4 text-center">
+                    <p className="text-sm text-zinc-400">Skipped for today.</p>
+                    <Button variant="secondary" onClick={() => toggleSkip(ex)}>Restore exercise</Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-1 grid grid-cols-[34px_minmax(0,1fr)_minmax(0,1fr)_48px] gap-2 text-center text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
+                      <span>Set</span>
+                      <span>{unitLabel}</span>
+                      <span>Reps</span>
+                      <span />
+                    </div>
+                    <ol className="space-y-1.5">
+                      {lane.map((row, i) => (
+                        <li key={row.id}>
                           <SetRowView
                             row={row}
                             label={String(i + 1)}
                             number={i + 1}
-                            tone="me"
+                            tone={laneTone}
                             unit={unit}
-                            who="Your"
-                            placeholder={placeholderFor(ex, "me", i)}
-                            isNext={!row.completed && ex.rows.slice(0, i).every((r) => r.completed)}
+                            who={laneWho}
+                            placeholder={placeholderFor(ex, view === "sam" ? "partner" : "me", i)}
+                            isNext={!row.completed && lane.slice(0, i).every((r) => r.completed)}
                             onField={(field, value) => patchRow(ex.id, row.id, { [field]: value, error: null })}
                             onBlur={() => commitEdit(ex, row)}
-                            onToggle={() => toggleComplete(ex, "me", i)}
+                            onToggle={() => toggleComplete(ex, view === "sam" ? "partner" : "me", i)}
                           />
-                          {theirs && (
-                            <SetRowView
-                              row={theirs}
-                              label={partnerName.slice(0, 1).toUpperCase()}
-                              number={i + 1}
-                              tone="partner"
-                              unit={unit}
-                              who={`${partnerName}'s`}
-                              placeholder={placeholderFor(ex, "partner", i)}
-                              isNext={!theirs.completed && ex.partnerRows.slice(0, i).every((r) => r.completed)}
-                              onField={(field, value) => patchRow(ex.id, theirs.id, { [field]: value, error: null })}
-                              onBlur={() => commitEdit(ex, theirs)}
-                              onToggle={() => toggleComplete(ex, "partner", i)}
-                            />
-                          )}
                         </li>
-                      );
-                    })}
-                  </ol>
-                  <Button variant="outline" className="h-12 w-full border-dashed text-zinc-400" onClick={() => addSet(ex)}>
-                    <Plus className="h-4 w-4" /> Add set
-                  </Button>
-                  {partner && <p className="text-xs text-zinc-500">Tap {partnerName}&rsquo;s numbers to correct them. Edits show who made them.</p>}
-                </>
-              )}
-            </section>
+                      ))}
+                    </ol>
+
+                    {/* All view: your buddy's progress in one line; tap to open and correct their sets */}
+                    {view === "all" && partner && (
+                      <button
+                        type="button"
+                        onClick={() => setFilter("sam")}
+                        aria-label={`Open ${partnerName}'s sets`}
+                        className="mt-2.5 flex min-h-[44px] w-full items-center gap-2 border-t border-dashed border-zinc-800 pt-2.5 text-left text-[13px] text-zinc-400"
+                      >
+                        <span className="font-display text-sm font-bold uppercase tracking-wider text-sky-300">{partnerFirst}</span>
+                        <span className="min-w-0 flex-1 truncate tabular-nums">
+                          {theirDone.length > 0 ? theirDone.map((r) => `${r.weight}×${r.reps}`).join(" · ") : "No sets yet"}
+                        </span>
+                        <span className="shrink-0 font-semibold text-sky-300">
+                          {theirDone.length} / {ex.partnerRows.length}
+                        </span>
+                      </button>
+                    )}
+                    {view === "sam" && (
+                      <p className="mt-2 text-xs text-zinc-500">Correcting {partnerName}&rsquo;s sets. Edits are marked &ldquo;edited by you&rdquo;.</p>
+                    )}
+
+                    <Button variant="outline" className="mt-2.5 h-11 w-full border-dashed text-zinc-400" onClick={() => addSet(ex)}>
+                      <Plus className="h-4 w-4" /> Add set
+                    </Button>
+                  </>
+                )}
+              </section>
           )}
 
           {/* prev / next */}
@@ -935,20 +969,10 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         </>
       )}
 
-      {live && rest && (
-        <RestTimerDock
-          rest={rest}
-          shared={Boolean(partner)}
-          onAdjust={(d) => {
-            const next = { endsAt: rest.endsAt + d * 1000, total: Math.max(1, rest.total + d) };
-            setRest(next);
-            realtime.sendRest(next);
-          }}
-          onSkip={() => {
-            setRest(null);
-            realtime.sendRest(null);
-          }}
-        />
+      {live && exercises.length > 0 && (
+        <Button variant="outline" className="mt-4 h-12 w-full border-emerald-500/60 font-display text-lg uppercase tracking-wider text-emerald-400" onClick={() => setFinishOpen(true)}>
+          Finish workout
+        </Button>
       )}
 
       {/* exercise menu */}

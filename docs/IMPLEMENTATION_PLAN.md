@@ -260,7 +260,7 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
 - **Objective**: Home screen and the fast logging flow, solo first.
 - **Acceptance Criteria**:
   - [x] **Today** (`/`): today's scheduled routine (device weekday) with exercise preview, Start / Resume, Change-routine sheet (incl. Freestyle), week strip, recent sessions; rest-day state; no-routines state linking to Plan.
-  - [x] **Workout** (`/session/[id]`): one exercise in focus with progress strip, prev/next, add exercise, skip/restore, remove last set; last-time values shown as **placeholders** (a confirm tap accepts them); one-tap ✓ logs and starts the rest timer; ✓ again undoes; kg/lb per profile; finish sheet (time / sets / volume) with Finish or Discard; completed sessions stay editable.
+  - [x] **Workout** (`/session/[id]`): one exercise in focus with progress strip, prev/next, add exercise, skip/restore, remove last set; last-time values shown as **placeholders** (a confirm tap accepts them); one-tap ✓ logs (no rest timer); ✓ again undoes; kg/lb per profile; finish sheet (time / sets / volume) with Finish or Discard; completed sessions stay editable.
   - [x] Writes are idempotent (client-generated set ids) with compare-and-swap on `revision_number`; a stale write returns the winning values; writes per set are queued so fast taps can't race.
   - [x] Bottom nav is Today / Plan / History / Buddy (History still points at the `/analytics` stub until M20).
   - [x] V1 `sessions` and `scheduling` code deleted.
@@ -275,7 +275,7 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
   - [x] "Train with <buddy>" toggle on Today (default off) creates an `invited` participant via `start_workout_session`; host can also invite mid-workout (`invite_buddy_to_session`).
   - [x] Invite delivery: global `InviteBanner` (initial fetch + Realtime on my `session_participants` rows + refetch when the app returns to the foreground) and a share-link fallback (iOS share sheet / clipboard) to `/session/[id]`.
   - [x] Join is always an explicit confirmation (banner buttons or the invite page); an invitee sees only the invite until they join (RLS + page gate). Late join and leave supported; decline then re-invite works.
-  - [x] Private per-session channel `session:<uuid>` authorized by `realtime.messages` policies (members only). Row changes (`workout_sets`, `session_participants`, `workout_sessions`), presence ("Sam is here · live · exercise"), and a shared rest timer broadcast as absolute end time.
+  - [x] Private per-session channel `session:<uuid>` authorized by `realtime.messages` policies (members only). Row changes (`workout_sets`, `session_participants`, `workout_sessions`) and presence.
   - [x] Two-lane logging: your rows and your buddy's rows per set; either person can edit either lane (also after finish) and rows show "edited by". Revision-checked writes; incoming events adopt only strictly newer revisions; writes in flight are never overwritten.
   - [x] Reconnect: every subscribe/reconnect fetches an authoritative snapshot (`getSessionSyncAction`) and reconciles (`sync.ts`: add / adopt / remove, skipping in-flight writes).
   - [x] Host finishes for everyone; a non-host "Finish my workout" only completes their own part.
@@ -326,3 +326,12 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
 - **How e2e runs**: builds into an isolated `.next-e2e` on port 3100 and uses the installed Google Chrome. It creates throwaway accounts named `zz_e2e_*` in the project from `.env.local`; global setup and teardown delete them (and everything they created) even when a test fails. Needs `SUPABASE_ACCESS_TOKEN` in `.env.local` for that cleanup. Prefer a separate Supabase project for CI.
 - **Remaining manual checks (need a physical iPhone)**: add to Home Screen, enable notifications and receive a push with the app closed, backgrounding behaviour during a workout.
 
+
+
+---
+
+## Post-M22 changes (owner requests, 2026-10-20)
+- **Workout screen = Option 1**: header with the All / Mine / <buddy> bar; All = your rows + a one-line buddy summary (tap to open their rows), Mine = yours, <buddy> = their full editable rows. Reference look from the "Gym Tracker Design Directions" canvas (Iron Black live workout) in the app's theme tokens.
+- **Rest timer removed everywhere**: no timer on logging, no rest setting on routines, `session_exercises.rest_seconds` dropped (migration `20261020000007_remove_rest_timer.sql`; `start_workout_session`, `join_workout_session`, `seed_starter_plan` rewritten), realtime rest broadcast removed.
+- **Workout-in-progress bar** (`ActiveWorkoutBar`, mounted in the root layout): shown above the bottom nav on every page except the workout itself, with elapsed time and **Resume**; re-checks on each navigation and when the app returns to the foreground.
+- Verification: `pnpm test` 49 passing, lint and type-check clean, all six DB suites `ALL_PASSED` after the migration, layout checked in the browser pane with mock data (All and buddy views). The e2e suite was updated for the new screen (filter bar, summary line, bottom Finish button, in-progress bar, no timer) but **not re-run** yet.

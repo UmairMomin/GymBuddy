@@ -48,13 +48,3 @@ export function reconcile(
   }
   return { add, adopt, remove };
 }
-
-/** Rest timers are shared as an absolute end time; clamp nonsense from the wire. */
-export function parseRestBroadcast(payload: unknown): { endsAt: number; total: number } | null {
-  if (!payload || typeof payload !== "object") return null;
-  const p = payload as { endsAt?: unknown; total?: unknown };
-  if (typeof p.endsAt !== "number" || typeof p.total !== "number") return null;
-  if (!Number.isFinite(p.endsAt) || !Number.isFinite(p.total)) return null;
-  if (p.total < 1 || p.total > 3600) return null;
-  return { endsAt: p.endsAt, total: p.total };
-}
