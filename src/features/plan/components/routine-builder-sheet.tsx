@@ -8,6 +8,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { saveRoutineAction, type PlanExercise, type PlanRoutine } from "@/features/plan/actions";
 import { EXERCISE_CATEGORIES, WEEKDAY_LABELS } from "@/features/plan/schemas";
 import { ExerciseFormSheet, labelize } from "@/features/plan/components/exercise-form-sheet";
+import { randomUUID } from "@/lib/uuid";
 import { cn } from "@/lib/utils";
 
 type Item = { exercise_id: string; target_sets: number; rep_min: number; rep_max: number; rest_seconds: number };
@@ -40,7 +41,7 @@ export function RoutineBuilderSheet(props: Props) {
 
 function RoutineBuilder({ open, onClose, routine, routines, exercises, schedule, onSaved }: Props) {
   // Client-generated id: saving twice (double tap, retry) hits the same routine instead of duplicating it.
-  const [routineId] = React.useState(() => routine?.id ?? crypto.randomUUID());
+  const [routineId] = React.useState(() => routine?.id ?? randomUUID());
   const [name, setName] = React.useState(routine?.name ?? "");
   const [items, setItems] = React.useState<Item[]>(() =>
     (routine?.items ?? []).map((i) => ({

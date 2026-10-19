@@ -37,6 +37,7 @@ import {
 import { reconcile, shouldAdopt } from "@/features/workout/sync";
 import { useSessionRealtime, type SetChange } from "@/features/workout/use-session-realtime";
 import { toCanonicalKg, toPreferredWeight } from "@/lib/units";
+import { randomUUID } from "@/lib/uuid";
 import { cn } from "@/lib/utils";
 
 type Row = {
@@ -74,7 +75,7 @@ function safeStorage(): Storage | null {
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 
 function emptyRow(owner: string, order: number): Row {
-  return { id: crypto.randomUUID(), owner, order, weight: "", reps: "", completed: false, saved: false, error: null, editedBy: null, queued: false };
+  return { id: randomUUID(), owner, order, weight: "", reps: "", completed: false, saved: false, error: null, editedBy: null, queued: false };
 }
 
 function rowFromSet(set: SetRow, unit: "kg" | "lb", me: string, nameOf: (id: string) => string): Row {
