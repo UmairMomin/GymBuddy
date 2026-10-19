@@ -1,6 +1,6 @@
-# Gym Tracker — Implementation Plan
+# GymBuddy — Implementation Plan
 
-This implementation plan breaks down the development of the Gym Tracker application into small, verifiable milestones based on [docs/MASTER_SPEC.md](file:///Users/umairmomin/Desktop/gymbuddy/docs/MASTER_SPEC.md).
+This implementation plan breaks down the development of the GymBuddy application into small, verifiable milestones based on [docs/MASTER_SPEC.md](file:///Users/umairmomin/Desktop/gymbuddy/docs/MASTER_SPEC.md).
 
 > **Rule**: Do not mark a milestone complete without concrete verification evidence (type-check passes, automated tests pass, or manual verification steps recorded).
 
@@ -331,7 +331,7 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
 ---
 
 ## Post-M22 changes (owner requests, 2026-10-20)
-- **Workout screen = Option 1**, exercises stacked as collapsible cards (the first with sets left starts open; any card opens or closes independently; closed shows `3 sets · 10 reps · you 0/3 · Sam 0/3`; no progress strip or Prev/Next arrows): header with the All / Mine / <buddy> bar; All = your rows + a one-line buddy summary (tap to open their rows), Mine = yours, <buddy> = their full editable rows. Reference look from the "Gym Tracker Design Directions" canvas (Iron Black live workout) in the app's theme tokens.
+- **Workout screen = Option 1**, exercises stacked as collapsible cards (the first with sets left starts open; any card opens or closes independently; closed shows `3 sets · 10 reps · you 0/3 · Sam 0/3`; no progress strip or Prev/Next arrows): header with the All / Mine / <buddy> bar; All = your rows + a one-line buddy summary (tap to open their rows), Mine = yours, <buddy> = their full editable rows. Reference look from the "GymBuddy Design Directions" canvas (Iron Black live workout) in the app's theme tokens.
 - **Rest timer removed everywhere**: no timer on logging, no rest setting on routines, `session_exercises.rest_seconds` dropped (migration `20261020000007_remove_rest_timer.sql`; `start_workout_session`, `join_workout_session`, `seed_starter_plan` rewritten), realtime rest broadcast removed.
 - **Workout-in-progress bar** (`ActiveWorkoutBar`, mounted in the root layout): shown above the bottom nav on every page except the workout itself, with elapsed time and **Resume**; re-checks on each navigation and when the app returns to the foreground.
 - Verification: `pnpm test` 49 passing, lint and type-check clean, all six DB suites `ALL_PASSED` after the migration, layout checked in the browser pane with mock data (All and buddy views). The e2e suite was updated for the new screen (filter bar, summary line, bottom Finish button, in-progress bar, no timer) and **re-run: 6/6 passing** (including the two-account live workout and the in-progress bar with Resume).

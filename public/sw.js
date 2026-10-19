@@ -1,5 +1,5 @@
 /*
- * Gym Tracker service worker.
+ * GymBuddy service worker.
  * Scope: Web Push only (workout invites). It deliberately does NOT cache pages or API responses:
  * every screen is auth-gated and live, and a stale cached screen would be worse than none.
  */
@@ -19,7 +19,7 @@ self.addEventListener("push", (event) => {
   } catch {
     data = {};
   }
-  const title = typeof data.title === "string" && data.title ? data.title : "Gym Tracker";
+  const title = typeof data.title === "string" && data.title ? data.title : "GymBuddy";
   const options = {
     body: typeof data.body === "string" ? data.body : "",
     icon: "/icon-192.png",

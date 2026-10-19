@@ -1,8 +1,8 @@
-# GYM TRACKER — MASTER IMPLEMENTATION SPECIFICATION
+# GYMBUDDY — MASTER IMPLEMENTATION SPECIFICATION
 
 > **V2 NOTICE (2026-10-19):** Product direction changed. Groups/workspaces are removed in favour of a solo tracker with one optional buddy. Read [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md) first; it overrides this document wherever they conflict (product definition, navigation, workspace/group data model and RLS, home screen).
 
-**Project:** Collaborative Gym Tracker  
+**Project:** Collaborative GymBuddy  
 **Version:** V1.0 — Scope Locked  
 **Platform:** Responsive, mobile-first web application / PWA  
 **Primary objective:** Replace a shared gym-tracking spreadsheet with a secure, real-time collaborative workout application.
@@ -32,7 +32,7 @@ The product decisions and scope in this document are authoritative. Do not reint
 
 # 2. PRODUCT DEFINITION
 
-Gym Tracker is a collaborative workout-tracking application for people who train together.
+GymBuddy is a collaborative workout-tracking application for people who train together.
 
 Multiple users can join a shared training workspace, follow reusable workout routines, start shared workout sessions, and record their individual performance in the same real-time log.
 
@@ -237,7 +237,7 @@ Next.js responsive application
 
 Use a feature-oriented structure similar to the following.
 
-gym-tracker/
+gymbuddy/
   src/
     app/
       (auth)/

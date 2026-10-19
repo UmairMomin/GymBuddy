@@ -1,5 +1,5 @@
 /**
- * High-precision weight conversion utilities for Gym Tracker.
+ * High-precision weight conversion utilities for GymBuddy.
  * Canonical storage convention: All weights in PostgreSQL are stored in kilograms (kg).
  * Display preferences support 'kg' and 'lb' seamlessly without silent data loss.
  */

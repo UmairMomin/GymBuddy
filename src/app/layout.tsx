@@ -25,15 +25,15 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "Gym Tracker",
+  title: "GymBuddy",
   description: "Track your training week and log workouts live with a friend.",
-  applicationName: "Gym Tracker",
+  applicationName: "GymBuddy",
   manifest: "/manifest.json",
   icons: { icon: "/icon.svg", apple: "/apple-touch-icon.png" },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Gym Tracker",
+    title: "GymBuddy",
   },
 };
 
@@ -73,7 +73,7 @@ export default function RootLayout({
                   href="/"
                   className="font-display text-2xl font-extrabold uppercase leading-none tracking-wide transition-colors hover:text-emerald-400"
                 >
-                  Gym<span className="text-emerald-400">Tracker</span>
+                  Gym<span className="text-emerald-400">Buddy</span>
                 </Link>
                 <Suspense fallback={null}>
                   <DesktopNavigation />

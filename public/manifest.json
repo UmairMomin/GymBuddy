@@ -1,6 +1,6 @@
 {
-  "name": "Gym Tracker",
-  "short_name": "Gym Tracker",
+  "name": "GymBuddy",
+  "short_name": "GymBuddy",
   "description": "Track your training week and log workouts live with a friend.",
   "start_url": "/",
   "display": "standalone",

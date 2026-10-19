@@ -60,7 +60,7 @@ export function InstallPrompt() {
       >
         <X className="h-4 w-4" />
       </button>
-      <p className="text-sm font-semibold text-zinc-50">Install Gym Tracker</p>
+      <p className="text-sm font-semibold text-zinc-50">Install GymBuddy</p>
       {ios ? (
         <p className="mt-1 text-sm text-zinc-400">
           Open this page in Safari, tap <Share aria-label="Share" className="mx-0.5 inline h-4 w-4 align-text-bottom" /> Share, then{" "}

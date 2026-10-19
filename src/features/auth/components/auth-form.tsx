@@ -48,7 +48,7 @@ export function AuthForm() {
           <Dumbbell className="h-6 w-6" />
         </div>
         <CardTitle className="text-xl">
-          {isSignUp ? "Create an account" : "Sign in to Gym Tracker"}
+          {isSignUp ? "Create an account" : "Sign in to GymBuddy"}
         </CardTitle>
         <CardDescription className="text-zinc-400 text-xs">
           {isSignUp

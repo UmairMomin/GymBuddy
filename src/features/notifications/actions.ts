@@ -57,7 +57,7 @@ export async function sendTestPushAction(): Promise<ActionResult> {
   if (!mine || mine.length === 0) return { error: "No device is registered for notifications" };
 
   const gone = await sendToTargets(mine, {
-    title: "Gym Tracker",
+    title: "GymBuddy",
     body: "Notifications are working. You'll hear about workout invites here.",
     url: "/",
     tag: "test",

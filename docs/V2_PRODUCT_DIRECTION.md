@@ -1,4 +1,4 @@
-# Gym Tracker — V2 Product Direction (Addendum to MASTER_SPEC)
+# GymBuddy — V2 Product Direction (Addendum to MASTER_SPEC)
 
 **Status:** Agreed with the product owner on 2026-10-19 after a requirements review ("grilling" session).
 **Authority:** Where this document conflicts with [MASTER_SPEC.md](MASTER_SPEC.md), **this document wins**. Everything in the spec that is not contradicted here (tech stack, RLS rules, security, testing, realtime rules, unit handling, coding standards) still applies.

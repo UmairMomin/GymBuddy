@@ -84,7 +84,7 @@ export async function GET(request: Request) {
     return new Response([header, ...body].join("\n"), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="gym-tracker-export-${stamp}.csv"`,
+        "Content-Disposition": `attachment; filename="gymbuddy-export-${stamp}.csv"`,
         "Cache-Control": "no-store",
       },
     });
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
   return new Response(JSON.stringify(flat, null, 2), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="gym-tracker-export-${stamp}.json"`,
+      "Content-Disposition": `attachment; filename="gymbuddy-export-${stamp}.json"`,
       "Cache-Control": "no-store",
     },
   });

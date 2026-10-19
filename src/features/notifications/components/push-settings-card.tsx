@@ -113,7 +113,7 @@ export function PushSettingsCard() {
         {status === "unsupported" && <p className="text-sm text-zinc-400">This browser doesn&rsquo;t support push notifications.</p>}
         {status === "denied" && (
           <p className="text-sm text-zinc-300">
-            Notifications are blocked for this app. Allow them in your device settings (Settings → Notifications → Gym Tracker), then
+            Notifications are blocked for this app. Allow them in your device settings (Settings → Notifications → GymBuddy), then
             reload.
           </p>
         )}

@@ -260,7 +260,7 @@ export function SettingsView({ initialSettings }: { initialSettings: UserProfile
           className="w-full text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20 h-10 gap-2 text-xs font-semibold"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
-          Sign Out of Gym Tracker
+          Sign Out of GymBuddy
         </Button>
       </div>
     </div>

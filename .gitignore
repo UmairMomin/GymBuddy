@@ -39,3 +39,23 @@ next-env.d.ts
 /.next-e2e
 /test-results
 /playwright-report
+
+# AI-agent tooling and notes (local only)
+/.agents/
+/.claude/
+/.cursor/
+/.codex/
+/.windsurf/
+/.antigravity/
+/.gemini/
+/AGENTS.md
+/CLAUDE.md
+/GEMINI.md
+/docs/AGENT_NOTES.md
+
+# Editor / OS clutter
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+Thumbs.db
