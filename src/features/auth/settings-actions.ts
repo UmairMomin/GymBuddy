@@ -11,7 +11,7 @@ export type ActionResult<T = unknown> = {
 
 export type UserProfileSettings = {
   id: string;
-  email: string;
+  username: string;
   displayName: string;
   preferredUnit: "kg" | "lb";
 };
@@ -31,7 +31,7 @@ export async function getUserProfileSettingsAction(): Promise<ActionResult<UserP
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("id, email, display_name, preferred_unit")
+    .select("id, username, display_name, preferred_unit")
     .eq("id", user.id)
     .single();
 
@@ -39,7 +39,7 @@ export async function getUserProfileSettingsAction(): Promise<ActionResult<UserP
     return {
       data: {
         id: user.id,
-        email: user.email || "",
+        username: user.email?.split("@")[0] ?? "",
         displayName: user.user_metadata?.display_name || user.email?.split("@")[0] || "Trainee",
         preferredUnit: "kg",
       },
@@ -49,7 +49,7 @@ export async function getUserProfileSettingsAction(): Promise<ActionResult<UserP
   return {
     data: {
       id: profile.id,
-      email: profile.email,
+      username: profile.username,
       displayName: profile.display_name,
       preferredUnit: (profile.preferred_unit as "kg" | "lb") || "kg",
     },

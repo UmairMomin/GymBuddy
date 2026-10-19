@@ -7,7 +7,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Workout", href: "/", icon: Dumbbell, match: ["/session"] },
   { label: "Routines", href: "/routines", icon: Calendar },
   { label: "Exercises", href: "/exercises", icon: ListChecks },
-  { label: "Groups", href: "/group", icon: Users },
+  { label: "Buddy", href: "/buddy", icon: Users },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
 ];
 

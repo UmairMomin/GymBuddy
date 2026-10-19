@@ -17,11 +17,11 @@ export async function UserMenu() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name")
+    .select("display_name, username")
     .eq("id", user.id)
     .maybeSingle();
 
-  const username = user.email?.split("@")[0] ?? "user";
+  const username = profile?.username ?? user.email?.split("@")[0] ?? "user";
   const name =
     profile?.display_name?.trim() ||
     (typeof user.user_metadata?.display_name === "string" ? user.user_metadata.display_name : "") ||

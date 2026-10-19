@@ -154,13 +154,13 @@ export function SettingsView({ initialSettings }: { initialSettings: UserProfile
             <span>Profile & Account</span>
           </CardTitle>
           <CardDescription className="text-xs text-zinc-400">
-            Your identity visible to workout partners in collaborative gym sessions.
+            Your identity as shown to your training buddy.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="text-xs font-semibold text-zinc-400">Email / Username</label>
-            <p className="text-sm font-mono text-zinc-200 mt-0.5">{initialSettings.email}</p>
+            <label className="text-xs font-semibold text-zinc-400">Username</label>
+            <p className="text-sm font-mono text-zinc-200 mt-0.5">@{initialSettings.username}</p>
           </div>
 
           <div>

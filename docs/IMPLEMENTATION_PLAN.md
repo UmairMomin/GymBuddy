@@ -231,12 +231,15 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
 - **Verification**: migration applied to Supabase Cloud via the Management API (HTTP 201); catalog query confirmed RLS/policies/seed/publication; RLS test run on the remote database.
 
 ## Milestone 16: Buddy Link
-- **Status**: NOT STARTED
+- **Status**: COMPLETED (code + static checks; signed-in UI not yet exercised in a browser)
 - **Objective**: Replace groups with a 1:1 buddy connection.
 - **Acceptance Criteria**:
-  - [ ] Request a buddy by username; accept/decline/remove; max one accepted buddy.
-  - [ ] **Buddy** tab shows link state and shared-session list.
-  - [ ] `/group`, group actions/components and workspace code removed.
+  - [x] Request a buddy by username; accept; decline/cancel/remove; max one accepted buddy (server RPCs `request_buddy` / `accept_buddy`, validated with Zod, covered by `supabase/tests/rls_buddy.sql`).
+  - [x] **Buddy** tab (`/buddy`): requests for you, add-buddy form, pending outgoing requests, buddy card, list of sessions done together.
+  - [x] `/group`, `src/features/groups`, and invite-code flows removed; nav item "Groups" replaced by "Buddy".
+  - [x] Settings and the profile menu read `profiles.username` (email column no longer exists).
+  - [ ] Manual check, signed in as two users: send request, accept, remove. (Needs real accounts; not done by the agent.)
+- **Verification**: `pnpm type-check` errors fell 109 → 71, none in M16 files; ESLint clean on `src/features/buddy`, `src/app/buddy`, `src/features/auth`, `src/components/layout`. Signed-out `/buddy` redirects to `/login?next=/buddy`. Remaining type errors are V1 modules (routines, sessions, scheduling, analytics, home) rewritten in M17–M20.
 
 ## Milestone 17: Plan (Schedule, Routines, Exercises)
 - **Status**: NOT STARTED
