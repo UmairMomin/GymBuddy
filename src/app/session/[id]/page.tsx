@@ -4,7 +4,8 @@ import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
-import { getWorkoutAction } from "@/features/workout/actions";
+import { getSessionAccessAction, getWorkoutAction } from "@/features/workout/actions";
+import { InviteCard } from "@/features/workout/components/invite-card";
 import { ActiveWorkout } from "@/features/workout/components/active-workout";
 
 async function WorkoutContent({ params }: { params: Promise<{ id: string }> }) {
@@ -15,6 +16,12 @@ async function WorkoutContent({ params }: { params: Promise<{ id: string }> }) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null; // the proxy redirects signed-out visitors to /login
+
+  // An invited buddy must confirm before seeing anything about the workout.
+  const access = await getSessionAccessAction(id);
+  if (access.data?.state === "invited") {
+    return <InviteCard sessionId={access.data.sessionId} name={access.data.name} hostName={access.data.hostName} />;
+  }
 
   const res = await getWorkoutAction(id);
   if (!res.data) {

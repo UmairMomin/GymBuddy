@@ -129,6 +129,8 @@ html[data-mode="light"] {
   --color-blue-400: #1d4ed8;
   --color-purple-400: #7e22ce;
   --color-cyan-400: #0e7490;
+  --color-sky-300: #1d5fd1; /* buddy lane text */
+  --color-sky-400: #1d5fd1;
   --color-rose-400: #be123c;
   --color-indigo-400: #4338ca;
 }

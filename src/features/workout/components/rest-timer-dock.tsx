@@ -27,10 +27,13 @@ export function formatClock(totalSeconds: number): string {
 
 export function RestTimerDock({
   rest,
+  shared = false,
   onAdjust,
   onSkip,
 }: {
   rest: RestState;
+  /** True when a buddy is in the session and sees the same countdown. */
+  shared?: boolean;
   onAdjust: (deltaSeconds: number) => void;
   onSkip: () => void;
 }) {
@@ -64,7 +67,7 @@ export function RestTimerDock({
       </div>
       <div className="flex items-center gap-2 p-3 pl-4">
         <div className="flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Rest</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{shared ? "Rest · shared" : "Rest"}</p>
           <p
             className={cn(
               "font-display text-4xl font-extrabold leading-none tabular-nums",

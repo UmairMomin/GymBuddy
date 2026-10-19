@@ -25,6 +25,7 @@ export function TodayView({ data }: { data: TodayData }) {
   const router = useRouter();
   const today = useTodayIndex();
   const [pickerOpen, setPickerOpen] = React.useState(false);
+  const [withBuddy, setWithBuddy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
 
@@ -36,7 +37,7 @@ export function TodayView({ data }: { data: TodayData }) {
   function start(routineId: string | null) {
     setError(null);
     startTransition(async () => {
-      const res = await startWorkoutAction(routineId);
+      const res = await startWorkoutAction(routineId, Boolean(data.buddy) && withBuddy);
       if (res.error || !res.data) {
         setError(res.error ?? "Couldn't start the workout");
         return;
@@ -44,6 +45,32 @@ export function TodayView({ data }: { data: TodayData }) {
       router.push(`/session/${res.data.id}`);
     });
   }
+
+
+  const buddyToggle = data.buddy ? (
+    <div className="flex items-center gap-3 rounded-2xl bg-[#a8cbff]/15 px-3.5 py-3">
+      <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#a8cbff] font-bold text-[#1e1e22]">
+        {data.buddy.displayName.slice(0, 1).toUpperCase()}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p id="buddy-toggle-label" className="truncate text-sm font-semibold">Train with {data.buddy.displayName}</p>
+        <p className="text-xs text-zinc-400">They get an invite when you start</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={withBuddy}
+        aria-labelledby="buddy-toggle-label"
+        onClick={() => setWithBuddy((v) => !v)}
+        className={cn(
+          "flex h-8 w-[3.25rem] shrink-0 items-center rounded-full p-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a8cbff]",
+          withBuddy ? "justify-end bg-[#a8cbff]" : "justify-start bg-zinc-700"
+        )}
+      >
+        <span className={cn("h-6 w-6 rounded-full", withBuddy ? "bg-[#1e1e22]" : "bg-zinc-300")} />
+      </button>
+    </div>
+  ) : null;
 
   const dateLabel =
     today < 0
@@ -120,6 +147,7 @@ export function TodayView({ data }: { data: TodayData }) {
                   <li className="py-2.5 text-sm text-zinc-400">+ {scheduled.exerciseCount - scheduled.preview.length} more</li>
                 )}
               </ul>
+              {buddyToggle}
               <Button
                 size="lg"
                 className="h-14 w-full font-display text-xl uppercase tracking-wider"
@@ -136,6 +164,7 @@ export function TodayView({ data }: { data: TodayData }) {
               </p>
               <p className="font-display text-5xl font-extrabold uppercase leading-none tracking-wide">Rest day</p>
               <p className="text-sm text-zinc-400">Nothing scheduled. Recover, or train anyway.</p>
+              {buddyToggle}
               <Button variant="secondary" className="w-full" onClick={() => setPickerOpen(true)}>
                 Start a workout anyway
               </Button>

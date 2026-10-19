@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { MobileNavigation } from "@/components/layout/mobile-navigation";
 import { DesktopNavigation } from "@/components/layout/desktop-navigation";
 import { UserMenu } from "@/components/layout/user-menu";
+import { InviteBanner } from "@/features/workout/components/invite-banner";
 import { NetworkStatusIndicator } from "@/components/layout/network-status-indicator";
 import { ThemeScript, ThemeSync } from "@/components/layout/theme-script";
 import "./globals.css";
@@ -57,6 +58,9 @@ export default function RootLayout({
       >
         <ThemeSync />
         <NetworkStatusIndicator />
+        <Suspense fallback={null}>
+          <InviteBanner />
+        </Suspense>
         <div className="pt-safe">
           <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8">
             <header className="flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">

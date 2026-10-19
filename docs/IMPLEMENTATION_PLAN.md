@@ -269,15 +269,19 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
 - **Verification**: ESLint clean across `src`; type-check has 1 remaining error, in V1 `src/features/analytics/actions.ts` (replaced in M20); DB flow test `supabase/tests/workout_flow.sql` passes (start from routine, idempotent start, one live session per host, duplicate set id rejected, stale revision write rejected, edit after finish, discard). UI checked at 375px in the browser pane with a temporary mock-data fixture (removed): Today (incl. weekday highlight), workout screen, placeholder-accept ✓, rest timer dock. Found and fixed a hydration mismatch on the elapsed clock and a pre-hydration "Rest day" flash.
 
 ## Milestone 19: Live Buddy Sessions
-- **Status**: NOT STARTED
+- **Status**: CODE COMPLETE, NOT VERIFIED END-TO-END. The live transport (Realtime channel, presence, broadcast) has not been exercised with two real signed-in devices; see the manual checklist below.
 - **Objective**: Invite a buddy into a workout and log together in real time.
 - **Acceptance Criteria**:
-  - [ ] "Train with buddy" toggle creates an `invited` participant; buddy sees banner + Join button via Realtime; Join/Decline confirmation always required.
-  - [ ] Share-link fallback via the iOS share sheet.
-  - [ ] Private per-session Realtime channel authorized by RLS; presence ("Buddy is here · live" + current set).
-  - [ ] Two-lane logging UI; either user can edit the other's sets (including after finish) with `last_edited_by` shown; conflicts handled via revisions.
-  - [ ] Shared rest timer (start timestamp); reconnect refetches authoritative state and merges queued writes.
-  - [ ] Late join / early leave supported.
+  - [x] "Train with <buddy>" toggle on Today (default off) creates an `invited` participant via `start_workout_session`; host can also invite mid-workout (`invite_buddy_to_session`).
+  - [x] Invite delivery: global `InviteBanner` (initial fetch + Realtime on my `session_participants` rows + refetch when the app returns to the foreground) and a share-link fallback (iOS share sheet / clipboard) to `/session/[id]`.
+  - [x] Join is always an explicit confirmation (banner buttons or the invite page); an invitee sees only the invite until they join (RLS + page gate). Late join and leave supported; decline then re-invite works.
+  - [x] Private per-session channel `session:<uuid>` authorized by `realtime.messages` policies (members only). Row changes (`workout_sets`, `session_participants`, `workout_sessions`), presence ("Sam is here · live · exercise"), and a shared rest timer broadcast as absolute end time.
+  - [x] Two-lane logging: your rows and your buddy's rows per set; either person can edit either lane (also after finish) and rows show "edited by". Revision-checked writes; incoming events adopt only strictly newer revisions; writes in flight are never overwritten.
+  - [x] Reconnect: every subscribe/reconnect fetches an authoritative snapshot (`getSessionSyncAction`) and reconciles (`sync.ts`: add / adopt / remove, skipping in-flight writes).
+  - [x] Host finishes for everyone; a non-host "Finish my workout" only completes their own part.
+  - [ ] **Manual two-device check** (needs two accounts that are buddies): (1) A starts Push with buddy on; B's banner appears and Join works; (2) A logs a set, it appears in B's lane within ~1s, and vice versa; (3) B edits A's weight, A sees the change and "edited by Sam"; (4) airplane-mode B for 20s while A logs, then reconnect: B catches up; (5) rest timer started by A counts down on B; (6) A finishes; B can still edit a set afterwards.
+- **Not built / limits**: no Web Push (M21: invite arrives via banner when the app is open, or via the share link); the buddy lane only shows exercises that are also in your own list; local offline write queue is M21 (a failed write shows an error and can be retried by tapping).
+- **Verification**: ESLint clean; unit tests `pnpm test` (9 passing: merge/reconcile rules, rest payload validation); DB tests `supabase/tests/buddy_session.sql` (invite → join copies host list → finish own part vs host finish → decline/re-invite → leave; channel writes denied to an invitee and a stranger, allowed to a joined member) plus all earlier DB tests re-run, all `ALL_PASSED`. UI checked at 375px with a mock-data fixture (removed): two-lane view, "waiting for buddy" state. Only remaining type error: V1 `analytics/actions.ts` (M20).
 
 ## Milestone 20: History
 - **Status**: NOT STARTED

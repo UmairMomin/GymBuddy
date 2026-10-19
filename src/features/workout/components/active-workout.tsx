@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronLeft, ChevronRight, Loader2, MoreHorizontal, Plus, Search } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2, MoreHorizontal, Plus, Search, Share2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
@@ -11,51 +11,72 @@ import {
   addExerciseToWorkoutAction,
   deleteSetAction,
   discardWorkoutAction,
+  finishMyWorkoutAction,
   finishWorkoutAction,
+  getSessionSyncAction,
+  inviteBuddyAction,
   saveSetAction,
   setExerciseSkippedAction,
+  type RosterEntry,
   type SessionExerciseView,
+  type SetRow,
   type WorkoutData,
 } from "@/features/workout/actions";
 import { RestTimerDock, formatClock, useNow, type RestState } from "@/features/workout/components/rest-timer-dock";
+import { reconcile, shouldAdopt } from "@/features/workout/sync";
+import { useSessionRealtime, type SetChange } from "@/features/workout/use-session-realtime";
 import { toCanonicalKg, toPreferredWeight } from "@/lib/units";
 import { cn } from "@/lib/utils";
 
 type Row = {
   id: string;
+  /** Whose set this is (me or my buddy). Either of us may edit either lane. */
+  owner: string;
   order: number;
   weight: string;
   reps: string;
   completed: boolean;
-  /** Last server revision we know about; null until the first save succeeds. */
+  /** Has been written to the server at least once. */
   saved: boolean;
   error: string | null;
+  /** Name of someone other than the owner who last edited this set, if any. */
+  editedBy: string | null;
 };
 
-type ExerciseState = Omit<SessionExerciseView, "sets"> & { rows: Row[] };
+type ExerciseState = Omit<SessionExerciseView, "sets"> & { rows: Row[]; partnerRows: Row[] };
+type Lane = "me" | "partner";
 
 /** Wall-clock time for event handlers (kept outside the component body so render stays pure). */
 const nowMs = () => Date.now();
 
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 
-function toExerciseState(ex: SessionExerciseView, unit: "kg" | "lb"): ExerciseState {
-  const { sets, ...rest } = ex;
-  const rows: Row[] = sets.map((s) => ({
-    id: s.id,
-    order: s.set_order,
-    weight: s.weight_kg > 0 ? fmt(toPreferredWeight(s.weight_kg, unit)) : "",
-    reps: s.reps > 0 ? String(s.reps) : "",
-    completed: s.completed,
+function emptyRow(owner: string, order: number): Row {
+  return { id: crypto.randomUUID(), owner, order, weight: "", reps: "", completed: false, saved: false, error: null, editedBy: null };
+}
+
+function rowFromSet(set: SetRow, unit: "kg" | "lb", me: string, nameOf: (id: string) => string): Row {
+  return {
+    id: set.id,
+    owner: set.user_id,
+    order: set.set_order,
+    weight: set.weight_kg > 0 ? fmt(toPreferredWeight(set.weight_kg, unit)) : "",
+    reps: set.reps > 0 ? String(set.reps) : "",
+    completed: set.completed,
     saved: true,
     error: null,
-  }));
-  let order = rows.length > 0 ? Math.max(...rows.map((r) => r.order)) : 0;
-  while (rows.length < ex.target_sets) {
+    editedBy: set.last_edited_by !== set.user_id ? (set.last_edited_by === me ? "you" : nameOf(set.last_edited_by)) : null,
+  };
+}
+
+function padLane(rows: Row[], owner: string, count: number): Row[] {
+  const out = [...rows];
+  let order = out.length > 0 ? Math.max(...out.map((r) => r.order)) : 0;
+  while (out.length < count) {
     order += 1;
-    rows.push({ id: crypto.randomUUID(), order, weight: "", reps: "", completed: false, saved: false, error: null });
+    out.push(emptyRow(owner, order));
   }
-  return { ...rest, rows };
+  return out;
 }
 
 function parseWeight(raw: string): number | null {
@@ -67,18 +88,119 @@ function parseReps(raw: string): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+function SetRowView({
+  row,
+  label,
+  tone,
+  unit,
+  placeholder,
+  isNext,
+  who,
+  onField,
+  onBlur,
+  onToggle,
+}: {
+  row: Row;
+  label: string;
+  tone: Lane;
+  unit: "kg" | "lb";
+  placeholder: { weight: string; reps: string };
+  isNext: boolean;
+  who: string;
+  onField: (field: "weight" | "reps", value: string) => void;
+  onBlur: () => void;
+  onToggle: () => void;
+}) {
+  const partner = tone === "partner";
+  const accent = partner
+    ? { text: "text-sky-300", border: "border-[#a8cbff]", doneBg: "bg-[#a8cbff]/25", fill: "border-[#a8cbff] bg-[#a8cbff] text-[#1e1e22]", ring: "border-[#a8cbff] text-sky-300" }
+    : { text: "text-emerald-400", border: "border-emerald-500", doneBg: "bg-emerald-500/15", fill: "border-emerald-500 bg-emerald-500 text-accent-ink", ring: "border-emerald-500 text-emerald-400" };
+
+  return (
+    <div>
+      <div className="grid grid-cols-[1.75rem_1fr_1fr_3.25rem] items-center gap-2.5">
+        <span className={cn("text-center text-sm font-bold", row.completed ? accent.text : partner ? "text-sky-300/80" : "text-zinc-300")}>
+          {label}
+        </span>
+        {(["weight", "reps"] as const).map((field) => (
+          <input
+            key={field}
+            inputMode={field === "weight" ? "decimal" : "numeric"}
+            aria-label={`${who} set ${label} ${field === "weight" ? `weight (${unit})` : "reps"}`}
+            value={row[field]}
+            placeholder={field === "weight" ? placeholder.weight : placeholder.reps}
+            onChange={(e) => onField(field, e.target.value)}
+            onBlur={onBlur}
+            className={cn(
+              "w-full min-w-0 rounded-2xl border-2 text-center font-bold tabular-nums placeholder:font-semibold placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2",
+              partner ? "h-11 text-lg focus-visible:ring-[#a8cbff]" : "h-[52px] text-xl focus-visible:ring-emerald-400",
+              row.completed
+                ? cn("border-transparent text-zinc-50", accent.doneBg)
+                : isNext
+                  ? cn("bg-zinc-950 text-zinc-50", accent.border)
+                  : "border-transparent bg-zinc-800/70 text-zinc-50"
+            )}
+          />
+        ))}
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={row.completed ? `${who} set ${label} logged, tap to undo` : `Log ${who} set ${label}`}
+          aria-pressed={row.completed}
+          className={cn(
+            "flex items-center justify-center rounded-2xl border-2 transition-transform active:scale-95",
+            partner ? "h-11 w-[3.25rem]" : "h-[52px] w-[52px]",
+            row.completed ? accent.fill : isNext ? accent.ring : "border-transparent bg-zinc-800/70 text-zinc-400"
+          )}
+        >
+          <Check className="h-6 w-6 stroke-[3]" />
+        </button>
+      </div>
+      {row.error && <p role="alert" className="mt-1 pl-9 text-xs text-red-400">{row.error}</p>}
+      {row.editedBy && !row.error && <p className="mt-0.5 pl-9 text-[11px] text-zinc-500">edited by {row.editedBy}</p>}
+    </div>
+  );
+}
+
 export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const router = useRouter();
   const { unit, session, userId } = data;
-  const live = session.status === "in_progress";
 
-  const [exercises, setExercises] = React.useState<ExerciseState[]>(() =>
-    data.exercises.map((e) => toExerciseState(e, unit))
+  const [roster, setRoster] = React.useState<RosterEntry[]>(data.roster);
+  const [sessionState, setSessionState] = React.useState({ status: session.status, endedAt: session.endedAt });
+  const live = sessionState.status === "in_progress";
+
+  const me = roster.find((r) => r.isMe);
+  const myName = me?.name ?? "You";
+  const partner = roster.find((r) => !r.isMe && (r.status === "joined" || r.status === "left")) ?? null;
+  const invited = roster.find((r) => !r.isMe && r.status === "invited") ?? null;
+  const nameOf = React.useCallback(
+    (id: string) => roster.find((r) => r.userId === id)?.name ?? data.buddy?.displayName ?? "Buddy",
+    [roster, data.buddy]
   );
+
+  const [exercises, setExercises] = React.useState<ExerciseState[]>(() => {
+    const partnerId = data.roster.find((r) => !r.isMe && (r.status === "joined" || r.status === "left"))?.userId ?? null;
+    const names = (id: string) => data.roster.find((r) => r.userId === id)?.name ?? "Buddy";
+    return data.exercises.map((e) => {
+      const { sets, ...rest } = e;
+      const rows = padLane(
+        sets.map((s) => rowFromSet(s, unit, userId, names)),
+        userId,
+        e.target_sets
+      );
+      const theirs = data.partnerSets.filter((s) => s.exercise_id === e.exercise_id).map((s) => rowFromSet(s, unit, userId, names));
+      const partnerRows = partnerId ? padLane(theirs, partnerId, rows.length) : theirs;
+      return { ...rest, rows, partnerRows };
+    });
+  });
+  const exercisesRef = React.useRef(exercises);
+  React.useEffect(() => {
+    exercisesRef.current = exercises;
+  });
+
   const [current, setCurrent] = React.useState(() => {
-    const i = data.exercises.findIndex(
-      (e) => !e.skipped && e.sets.filter((s) => s.completed).length < e.target_sets
-    );
+    const i = data.exercises.findIndex((e) => !e.skipped && e.sets.filter((s) => s.completed).length < e.target_sets);
     return i === -1 ? 0 : i;
   });
   const [rest, setRest] = React.useState<RestState | null>(null);
@@ -89,31 +211,47 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const [banner, setBanner] = React.useState<string | null>(null);
   const [busy, startTransition] = React.useTransition();
 
-  // Per-set write queue + latest known revision, so rapid taps never race or go stale.
+  // Per-set write queue, in-flight set ids and latest known revisions: rapid taps never race or go stale.
   const queues = React.useRef(new Map<string, Promise<unknown>>());
+  const pending = React.useRef(new Set<string>());
   const revisions = React.useRef(
-    new Map<string, number | null>(data.exercises.flatMap((e) => e.sets.map((s) => [s.id, s.revision_number] as const)))
+    new Map<string, number | null>(
+      [...data.exercises.flatMap((e) => e.sets), ...data.partnerSets].map((s) => [s.id, s.revision_number] as const)
+    )
   );
 
   const now = useNow(live, 1000);
-  const endMs = session.endedAt ? Date.parse(session.endedAt) : now;
+  const endMs = sessionState.endedAt ? Date.parse(sessionState.endedAt) : now;
   const elapsed = Math.max(0, (endMs - Date.parse(session.startedAt)) / 1000);
 
   const ex = exercises[current] as ExerciseState | undefined;
 
+  // ---- row helpers ---------------------------------------------------------------------------
   function patchRow(exId: string, rowId: string, change: Partial<Row>) {
     setExercises((prev) =>
-      prev.map((e) => (e.id === exId ? { ...e, rows: e.rows.map((r) => (r.id === rowId ? { ...r, ...change } : r)) } : e))
+      prev.map((e) =>
+        e.id === exId
+          ? {
+              ...e,
+              rows: e.rows.map((r) => (r.id === rowId ? { ...r, ...change } : r)),
+              partnerRows: e.partnerRows.map((r) => (r.id === rowId ? { ...r, ...change } : r)),
+            }
+          : e
+      )
     );
   }
 
-  function placeholderFor(e: ExerciseState, index: number): { weight: string; reps: string } {
-    const l = e.last[index] ?? e.last[e.last.length - 1];
-    if (l) return { weight: l.weight_kg > 0 ? fmt(toPreferredWeight(l.weight_kg, unit)) : "", reps: l.reps > 0 ? String(l.reps) : "" };
-    const prev = e.rows[index - 1];
+  function placeholderFor(e: ExerciseState, lane: Lane, index: number): { weight: string; reps: string } {
+    if (lane === "me") {
+      const l = e.last[index] ?? e.last[e.last.length - 1];
+      if (l) return { weight: l.weight_kg > 0 ? fmt(toPreferredWeight(l.weight_kg, unit)) : "", reps: l.reps > 0 ? String(l.reps) : "" };
+    }
+    const lanes = lane === "me" ? e.rows : e.partnerRows;
+    const prev = lanes[index - 1];
     return { weight: prev?.weight ?? "", reps: prev?.reps ?? "" };
   }
 
+  // ---- writes ---------------------------------------------------------------------------------
   /** Queue a write for one set; applies the server's answer (revision, or the winning values on conflict). */
   function persist(e: ExerciseState, row: Row, values: { weight: number; reps: number; completed: boolean }) {
     const run = async () => {
@@ -121,7 +259,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         id: row.id,
         session_id: session.id,
         exercise_id: e.exercise_id,
-        user_id: userId,
+        user_id: row.owner,
         set_order: row.order,
         set_type: "normal",
         weight_kg: toCanonicalKg(values.weight, unit),
@@ -133,10 +271,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         revisions.current.set(row.id, res.data.revision_number);
         if (res.conflict) {
           patchRow(e.id, row.id, {
-            weight: res.data.weight_kg > 0 ? fmt(toPreferredWeight(res.data.weight_kg, unit)) : "",
-            reps: res.data.reps > 0 ? String(res.data.reps) : "",
-            completed: res.data.completed,
-            saved: true,
+            ...rowFromSet(res.data, unit, userId, nameOf),
             error: res.error ?? null,
           });
         } else {
@@ -147,18 +282,29 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       }
     };
     const prior = queues.current.get(row.id) ?? Promise.resolve();
-    queues.current.set(row.id, prior.then(run, run));
+    pending.current.add(row.id);
+    const p: Promise<unknown> = prior.then(run, run).finally(() => {
+      if (queues.current.get(row.id) === p) pending.current.delete(row.id);
+    });
+    queues.current.set(row.id, p);
   }
 
-  function toggleComplete(e: ExerciseState, index: number) {
-    const row = e.rows[index];
+  function startRest(seconds: number) {
+    const next = { endsAt: nowMs() + seconds * 1000, total: seconds };
+    setRest(next);
+    realtime.sendRest(next);
+  }
+
+  function toggleComplete(e: ExerciseState, lane: Lane, index: number) {
+    const rows = lane === "me" ? e.rows : e.partnerRows;
+    const row = rows[index];
     if (row.completed) {
       patchRow(e.id, row.id, { completed: false, error: null });
       persist(e, row, { weight: parseWeight(row.weight) ?? 0, reps: parseReps(row.reps) ?? 0, completed: false });
       return;
     }
     // A confirm tap accepts the grey placeholder values when nothing was typed.
-    const ph = placeholderFor(e, index);
+    const ph = placeholderFor(e, lane, index);
     const weight = parseWeight(row.weight || ph.weight);
     const reps = parseReps(row.reps || ph.reps);
     if (weight === null || reps === null || reps === 0) {
@@ -168,10 +314,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     const filled = { ...row, weight: row.weight || ph.weight, reps: row.reps || ph.reps, completed: true, error: null };
     patchRow(e.id, row.id, filled);
     persist(e, filled, { weight, reps, completed: true });
-    if (live) {
-      const seconds = e.rest_seconds ?? 90;
-      setRest({ endsAt: nowMs() + seconds * 1000, total: seconds });
-    }
+    if (live && lane === "me") startRest(e.rest_seconds ?? 90);
   }
 
   function commitEdit(e: ExerciseState, row: Row) {
@@ -184,23 +327,23 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   }
 
   function addSet(e: ExerciseState) {
-    const order = Math.max(0, ...e.rows.map((r) => r.order)) + 1;
     setExercises((prev) =>
-      prev.map((x) =>
-        x.id === e.id
-          ? { ...x, rows: [...x.rows, { id: crypto.randomUUID(), order, weight: "", reps: "", completed: false, saved: false, error: null }] }
-          : x
-      )
+      prev.map((x) => {
+        if (x.id !== e.id) return x;
+        const rows = padLane(x.rows, userId, x.rows.length + 1);
+        const partnerRows = partner ? padLane(x.partnerRows, partner.userId, rows.length) : x.partnerRows;
+        return { ...x, rows, partnerRows };
+      })
     );
   }
 
   function removeLastSet(e: ExerciseState) {
     const last = e.rows[e.rows.length - 1];
     if (!last || e.rows.length <= 1) return;
-    setExercises((prev) => prev.map((x) => (x.id === e.id ? { ...x, rows: x.rows.slice(0, -1) } : x)));
-    if (last.saved) {
-      void deleteSetAction(last.id).then((r) => r.error && setBanner(r.error));
-    }
+    setExercises((prev) =>
+      prev.map((x) => (x.id === e.id ? { ...x, rows: x.rows.slice(0, -1), partnerRows: x.partnerRows.slice(0, x.rows.length - 1) } : x))
+    );
+    if (last.saved) void deleteSetAction(last.id).then((r) => r.error && setBanner(r.error));
     setMenuOpen(false);
   }
 
@@ -219,7 +362,8 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         return;
       }
       const meta = data.catalog.find((c) => c.id === exerciseId);
-      const view: SessionExerciseView = {
+      const rows = padLane([], userId, 3);
+      const added: ExerciseState = {
         id: res.data.id,
         exercise_id: exerciseId,
         name: meta?.name ?? "Exercise",
@@ -230,21 +374,128 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         rep_max: null,
         rest_seconds: 90,
         skipped: false,
-        sets: [],
+        rows,
+        partnerRows: partner ? padLane([], partner.userId, rows.length) : [],
         last: [],
       };
       setExercises((prev) => {
         setCurrent(prev.length);
-        return [...prev, toExerciseState(view, unit)];
+        return [...prev, added];
       });
       setAddOpen(false);
       setQuery("");
     });
   }
 
+  // ---- realtime: remote changes and resync ------------------------------------------------------
+  function applyServerSet(set: SetRow) {
+    if (pending.current.has(set.id)) return; // our own write is in flight; its response settles the row
+    if (!shouldAdopt(revisions.current.get(set.id), set.revision_number)) return; // own echo or stale event
+    revisions.current.set(set.id, set.revision_number);
+    const isMine = set.user_id === userId;
+    setExercises((prev) =>
+      prev.map((e) => {
+        if (e.exercise_id !== set.exercise_id) return e;
+        const key = isMine ? "rows" : "partnerRows";
+        const lane = e[key];
+        const row = rowFromSet(set, unit, userId, nameOf);
+        const at = lane.findIndex((r) => r.id === set.id);
+        let next: Row[];
+        if (at >= 0) {
+          next = lane.map((r) => (r.id === set.id ? row : r));
+        } else {
+          const blank = lane.findIndex((r) => !r.saved && r.order === set.set_order && r.weight === "" && r.reps === "");
+          next = blank >= 0 ? lane.map((r, i) => (i === blank ? row : r)) : [...lane, row].sort((a, b) => a.order - b.order);
+        }
+        return { ...e, [key]: next };
+      })
+    );
+  }
+
+  function removeServerSet(id: string) {
+    if (pending.current.has(id)) return;
+    revisions.current.delete(id);
+    setExercises((prev) =>
+      prev.map((e) => ({ ...e, rows: e.rows.filter((r) => r.id !== id), partnerRows: e.partnerRows.filter((r) => r.id !== id) }))
+    );
+  }
+
+  function onSetChange(change: SetChange) {
+    if (change.kind === "delete") removeServerSet(change.id);
+    else applyServerSet(change.set);
+  }
+
+  async function resync() {
+    const res = await getSessionSyncAction(session.id);
+    if (!res.data) return;
+    const sync = res.data;
+    setRoster(sync.roster);
+    setSessionState({ status: sync.status, endedAt: sync.endedAt });
+
+    const joinedPartner = sync.roster.find((r) => !r.isMe && (r.status === "joined" || r.status === "left"));
+    if (joinedPartner) {
+      setExercises((prev) =>
+        prev.map((e) => ({ ...e, partnerRows: padLane(e.partnerRows, joinedPartner.userId, e.rows.length) }))
+      );
+    }
+
+    const serverSets = [...sync.mySets, ...sync.partnerSets];
+    const local = exercisesRef.current.flatMap((e) => [...e.rows, ...e.partnerRows]).map((r) => ({
+      id: r.id,
+      saved: r.saved,
+      revision: revisions.current.get(r.id) ?? null,
+    }));
+    const diff = reconcile(local, serverSets, pending.current);
+    const byId = new Map(serverSets.map((s) => [s.id, s]));
+    for (const id of [...diff.add, ...diff.adopt]) {
+      const s = byId.get(id);
+      if (s) applyServerSet(s);
+    }
+    for (const id of diff.remove) removeServerSet(id);
+  }
+
+  const realtime = useSessionRealtime({
+    sessionId: session.id,
+    userId,
+    name: myName,
+    enabled: true,
+    onSetChange,
+    onRosterChange: () => void resync(),
+    onResync: () => void resync(),
+    onRest: setRest,
+  });
+
+  const currentExerciseId = ex?.exercise_id ?? null;
+  const { track } = realtime;
+  React.useEffect(() => {
+    track(currentExerciseId);
+  }, [track, currentExerciseId]);
+
+  const peer = realtime.peers[0] ?? null;
+  const peerExercise = peer ? exercises.find((e) => e.exercise_id === peer.exerciseId)?.name : undefined;
+
+  // ---- session actions --------------------------------------------------------------------------
+  function shareInvite() {
+    const url = `${window.location.origin}/session/${session.id}`;
+    const title = `${session.name} workout`;
+    if (navigator.share) {
+      navigator.share({ title, text: `Join my ${session.name} workout`, url }).catch(() => undefined);
+    } else {
+      void navigator.clipboard?.writeText(url).then(() => setBanner("Invite link copied"));
+    }
+  }
+
+  function inviteBuddy() {
+    startTransition(async () => {
+      const res = await inviteBuddyAction(session.id);
+      if (res.error) setBanner(res.error);
+      else await resync();
+    });
+  }
+
   function finish() {
     startTransition(async () => {
-      const res = await finishWorkoutAction(session.id);
+      const res = session.isHost ? await finishWorkoutAction(session.id) : await finishMyWorkoutAction(session.id);
       if (res.error) {
         setBanner(res.error);
         setFinishOpen(false);
@@ -288,6 +539,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   }, [data.catalog, exercises, query]);
 
   const unitLabel = unit.toUpperCase();
+  const partnerName = partner?.name ?? "";
 
   return (
     <div className="mx-auto w-full max-w-xl pb-44">
@@ -303,7 +555,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         <div className="min-w-0 flex-1">
           <h1 className="truncate font-display text-2xl font-extrabold uppercase leading-tight tracking-wide">{session.name}</h1>
           <p className="text-xs tabular-nums text-zinc-400" suppressHydrationWarning>
-            {live ? formatClock(elapsed) : `${session.status === "completed" ? "Completed" : "Discarded"} · ${formatClock(elapsed)}`}
+            {live ? formatClock(elapsed) : `${sessionState.status === "completed" ? "Completed" : "Discarded"} · ${formatClock(elapsed)}`}
           </p>
         </div>
         {live && (
@@ -312,6 +564,44 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
           </Button>
         )}
       </header>
+
+      {/* buddy presence / invite */}
+      {live && (partner || invited || (session.isHost && data.buddy)) && (
+        <div
+          role="status"
+          className="mb-3 flex items-center gap-3 rounded-2xl bg-[#a8cbff]/15 px-3.5 py-2.5 text-sm text-zinc-100"
+        >
+          {partner ? (
+            <>
+              <span
+                aria-hidden
+                className={cn("h-2 w-2 shrink-0 rounded-full", realtime.status === "live" && peer ? "bg-[#a8cbff]" : "bg-zinc-500")}
+              />
+              <span className="min-w-0 flex-1 truncate">
+                {realtime.status === "reconnecting"
+                  ? "Reconnecting…"
+                  : peer
+                    ? `${partnerName} is here · live${peerExercise ? ` · ${peerExercise}` : ""}`
+                    : `${partnerName} · not connected`}
+              </span>
+            </>
+          ) : invited ? (
+            <>
+              <span className="min-w-0 flex-1 truncate">Waiting for {invited.name} to join</span>
+              <Button size="sm" variant="secondary" onClick={shareInvite}>
+                <Share2 className="h-4 w-4" /> Share link
+              </Button>
+            </>
+          ) : (
+            <>
+              <span className="min-w-0 flex-1 truncate">Train with {data.buddy?.displayName}?</span>
+              <Button size="sm" variant="secondary" disabled={busy} onClick={inviteBuddy}>
+                <UserPlus className="h-4 w-4" /> Invite
+              </Button>
+            </>
+          )}
+        </div>
+      )}
 
       {banner && (
         <p role="alert" className="mb-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
@@ -393,54 +683,42 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
                     <span className="text-center">REPS</span>
                     <span />
                   </div>
-                  <ol className="space-y-2.5">
+                  {partner && (
+                    <p className="flex gap-4 px-0.5 text-[11px] font-bold uppercase tracking-wider">
+                      <span className="text-emerald-400">● You</span>
+                      <span className="text-sky-300">● {partnerName}</span>
+                    </p>
+                  )}
+                  <ol className="space-y-3">
                     {ex.rows.map((row, i) => {
-                      const ph = placeholderFor(ex, i);
-                      const isNext = !row.completed && ex.rows.slice(0, i).every((r) => r.completed);
+                      const theirs = partner ? ex.partnerRows[i] : undefined;
                       return (
-                        <li key={row.id}>
-                          <div className="grid grid-cols-[1.75rem_1fr_1fr_3.25rem] items-center gap-2.5">
-                            <span className={cn("text-center text-sm font-bold", row.completed ? "text-emerald-400" : "text-zinc-300")}>
-                              {i + 1}
-                            </span>
-                            {(["weight", "reps"] as const).map((field) => (
-                              <input
-                                key={field}
-                                inputMode={field === "weight" ? "decimal" : "numeric"}
-                                aria-label={`Set ${i + 1} ${field === "weight" ? `weight (${unit})` : "reps"}`}
-                                value={row[field]}
-                                placeholder={field === "weight" ? ph.weight : ph.reps}
-                                onChange={(e) => patchRow(ex.id, row.id, { [field]: e.target.value, error: null })}
-                                onBlur={() => commitEdit(ex, row)}
-                                className={cn(
-                                  "h-[52px] w-full min-w-0 rounded-2xl border-2 text-center text-xl font-bold tabular-nums placeholder:font-semibold placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400",
-                                  row.completed
-                                    ? "border-transparent bg-emerald-500/15 text-zinc-50"
-                                    : isNext
-                                      ? "border-emerald-500 bg-zinc-950 text-zinc-50"
-                                      : "border-transparent bg-zinc-800/70 text-zinc-50"
-                                )}
-                              />
-                            ))}
-                            <button
-                              type="button"
-                              onClick={() => toggleComplete(ex, i)}
-                              aria-label={row.completed ? `Set ${i + 1} logged, tap to undo` : `Log set ${i + 1}`}
-                              aria-pressed={row.completed}
-                              className={cn(
-                                "flex h-[52px] w-[52px] items-center justify-center rounded-2xl border-2 transition-transform active:scale-95",
-                                row.completed
-                                  ? "border-emerald-500 bg-emerald-500 text-accent-ink"
-                                  : isNext
-                                    ? "border-emerald-500 text-emerald-400"
-                                    : "border-transparent bg-zinc-800/70 text-zinc-400"
-                              )}
-                            >
-                              <Check className="h-6 w-6 stroke-[3]" />
-                            </button>
-                          </div>
-                          {row.error && (
-                            <p role="alert" className="mt-1 pl-9 text-xs text-red-400">{row.error}</p>
+                        <li key={row.id} className="space-y-1.5">
+                          <SetRowView
+                            row={row}
+                            label={String(i + 1)}
+                            tone="me"
+                            unit={unit}
+                            who="Your"
+                            placeholder={placeholderFor(ex, "me", i)}
+                            isNext={!row.completed && ex.rows.slice(0, i).every((r) => r.completed)}
+                            onField={(field, value) => patchRow(ex.id, row.id, { [field]: value, error: null })}
+                            onBlur={() => commitEdit(ex, row)}
+                            onToggle={() => toggleComplete(ex, "me", i)}
+                          />
+                          {theirs && (
+                            <SetRowView
+                              row={theirs}
+                              label={partnerName.slice(0, 1).toUpperCase()}
+                              tone="partner"
+                              unit={unit}
+                              who={`${partnerName}'s`}
+                              placeholder={placeholderFor(ex, "partner", i)}
+                              isNext={!theirs.completed && ex.partnerRows.slice(0, i).every((r) => r.completed)}
+                              onField={(field, value) => patchRow(ex.id, theirs.id, { [field]: value, error: null })}
+                              onBlur={() => commitEdit(ex, theirs)}
+                              onToggle={() => toggleComplete(ex, "partner", i)}
+                            />
                           )}
                         </li>
                       );
@@ -449,6 +727,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
                   <Button variant="outline" className="h-12 w-full border-dashed text-zinc-400" onClick={() => addSet(ex)}>
                     <Plus className="h-4 w-4" /> Add set
                   </Button>
+                  {partner && <p className="text-xs text-zinc-500">Tap {partnerName}&rsquo;s numbers to correct them. Edits show who made them.</p>}
                 </>
               )}
             </section>
@@ -473,10 +752,16 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       {live && rest && (
         <RestTimerDock
           rest={rest}
-          onAdjust={(d) =>
-            setRest((r) => (r ? { endsAt: r.endsAt + d * 1000, total: Math.max(1, r.total + d) } : r))
-          }
-          onSkip={() => setRest(null)}
+          shared={Boolean(partner)}
+          onAdjust={(d) => {
+            const next = { endsAt: rest.endsAt + d * 1000, total: Math.max(1, rest.total + d) };
+            setRest(next);
+            realtime.sendRest(next);
+          }}
+          onSkip={() => {
+            setRest(null);
+            realtime.sendRest(null);
+          }}
         />
       )}
 
@@ -525,22 +810,24 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       <Sheet
         open={finishOpen}
         onClose={() => setFinishOpen(false)}
-        title="Finish workout?"
+        title={session.isHost ? "Finish workout?" : "Finish your workout?"}
         footer={
           <div className="space-y-2">
             <Button className="w-full" disabled={busy} onClick={finish}>
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Finish workout
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />} {session.isHost ? "Finish workout" : "Finish my workout"}
             </Button>
-            <Button variant="ghost" className="w-full text-red-400" disabled={busy} onClick={discard}>
-              Discard workout
-            </Button>
+            {session.isHost && (
+              <Button variant="ghost" className="w-full text-red-400" disabled={busy} onClick={discard}>
+                Discard workout
+              </Button>
+            )}
           </div>
         }
       >
         <dl className="grid grid-cols-3 gap-2 pt-2 text-center">
           <div className="rounded-2xl bg-zinc-900 p-3">
             <dt className="text-[11px] font-semibold uppercase text-zinc-400">Time</dt>
-            <dd className="font-display text-2xl font-extrabold tabular-nums">{formatClock(elapsed)}</dd>
+            <dd className="font-display text-2xl font-extrabold tabular-nums" suppressHydrationWarning>{formatClock(elapsed)}</dd>
           </div>
           <div className="rounded-2xl bg-zinc-900 p-3">
             <dt className="text-[11px] font-semibold uppercase text-zinc-400">Sets</dt>
@@ -554,6 +841,9 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
             </dd>
           </div>
         </dl>
+        {session.isHost && partner && (
+          <p className="mt-3 text-sm text-zinc-400">This ends the workout for {partnerName} too. Their logged sets are kept.</p>
+        )}
         {exercises.some((e) => !e.skipped && e.rows.some((r) => !r.completed)) && (
           <p className="mt-3 text-sm text-amber-400">Some sets aren&rsquo;t logged yet. They won&rsquo;t be saved.</p>
         )}

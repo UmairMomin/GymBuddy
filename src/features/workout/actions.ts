@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser, SIGN_IN_REQUIRED } from "@/lib/supabase/require-user";
 import { idSchema, saveSetSchema, type SaveSetInput } from "@/features/workout/schemas";
@@ -27,6 +26,8 @@ export type RecentSession = {
 };
 
 export type TodayData = {
+  /** My accepted buddy, if any (drives the "Train with …" toggle). */
+  buddy: { id: string; displayName: string } | null;
   routines: RoutineSummary[];
   /** Index = weekday (0 = Mon); routine id or null for rest. */
   schedule: Array<string | null>;
@@ -38,6 +39,7 @@ export type SetRow = {
   id: string;
   exercise_id: string;
   user_id: string;
+  last_edited_by: string;
   set_order: number;
   set_type: string;
   weight_kg: number;
@@ -63,8 +65,24 @@ export type SessionExerciseView = {
   last: LastTimeSet[];
 };
 
+export type RosterEntry = {
+  userId: string;
+  name: string;
+  status: string;
+  isMe: boolean;
+  isHost: boolean;
+};
+
+export type PendingInvite = { sessionId: string; name: string; hostName: string };
+
 export type WorkoutData = {
   userId: string;
+  /** Everyone in the session (me included), with names. */
+  roster: RosterEntry[];
+  /** Other participants' sets (members can read these under RLS). */
+  partnerSets: SetRow[];
+  /** My accepted buddy (for "Invite" when they are not in this session yet). */
+  buddy: { id: string; displayName: string } | null;
   unit: "kg" | "lb";
   session: {
     id: string;
@@ -79,7 +97,7 @@ export type WorkoutData = {
 };
 
 const SET_COLUMNS =
-  "id, exercise_id, user_id, set_order, set_type, weight_kg, reps, completed, revision_number";
+  "id, exercise_id, user_id, last_edited_by, set_order, set_type, weight_kg, reps, completed, revision_number";
 
 function rpcMessage(error: { message: string; code?: string }): string {
   return error.code === "P0001" ? error.message : "Something went wrong. Please try again.";
@@ -90,7 +108,7 @@ export async function getTodayAction(): Promise<ActionResult<TodayData>> {
   const user = await requireUser(supabase);
   if (!user) return { error: SIGN_IN_REQUIRED };
 
-  const [routinesRes, scheduleRes, exercisesRes, activeRes, recentRes] = await Promise.all([
+  const [routinesRes, scheduleRes, exercisesRes, activeRes, recentRes, buddyRes] = await Promise.all([
     supabase
       .from("routines")
       .select("id, name, routine_versions(version_number, structure_json)")
@@ -113,7 +131,16 @@ export async function getTodayAction(): Promise<ActionResult<TodayData>> {
       .neq("workout_sessions.status", "in_progress")
       .order("created_at", { ascending: false })
       .limit(5),
+    supabase.from("buddy_links").select("requester_id, addressee_id").eq("status", "accepted").limit(1),
   ]);
+
+  let buddy: TodayData["buddy"] = null;
+  const link = buddyRes.data?.[0];
+  if (link) {
+    const buddyId = link.requester_id === user.id ? link.addressee_id : link.requester_id;
+    const { data: bp } = await supabase.from("profiles").select("id, display_name").eq("id", buddyId).maybeSingle();
+    if (bp) buddy = { id: bp.id, displayName: bp.display_name };
+  }
 
   if (routinesRes.error || scheduleRes.error || exercisesRes.error) {
     return { error: "Couldn't load your week" };
@@ -168,6 +195,7 @@ export async function getTodayAction(): Promise<ActionResult<TodayData>> {
 
   return {
     data: {
+      buddy,
       routines,
       schedule,
       activeSession: active ? { id: active.id, name: active.name, startedAt: active.started_at } : null,
@@ -184,7 +212,10 @@ export async function getTodayAction(): Promise<ActionResult<TodayData>> {
 }
 
 /** Starts a session from a routine (or freestyle when null) and returns its id. */
-export async function startWorkoutAction(routineId: string | null): Promise<ActionResult<{ id: string }>> {
+export async function startWorkoutAction(
+  routineId: string | null,
+  withBuddy = false
+): Promise<ActionResult<{ id: string }>> {
   if (routineId !== null && !idSchema.safeParse(routineId).success) return { error: "Invalid routine" };
 
   const supabase = await createClient();
@@ -204,7 +235,7 @@ export async function startWorkoutAction(routineId: string | null): Promise<Acti
     p_name: name,
     // The SQL function accepts NULL for a freestyle workout; generated types can't express nullable args.
     p_routine_id: routineId as string,
-    p_with_buddy: false,
+    p_with_buddy: withBuddy,
   });
   if (error) {
     // The one-live-session-per-host index fires when a workout is already running.
@@ -216,12 +247,6 @@ export async function startWorkoutAction(routineId: string | null): Promise<Acti
   return { data: { id: sessionId } };
 }
 
-export async function startWorkoutAndOpenAction(routineId: string | null): Promise<ActionResult> {
-  const res = await startWorkoutAction(routineId);
-  if (res.error || !res.data) return { error: res.error ?? "Couldn't start the workout" };
-  redirect(`/session/${res.data.id}`);
-}
-
 export async function getWorkoutAction(sessionId: string): Promise<ActionResult<WorkoutData>> {
   if (!idSchema.safeParse(sessionId).success) return { error: "Workout not found" };
 
@@ -229,7 +254,7 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
   const user = await requireUser(supabase);
   if (!user) return { error: SIGN_IN_REQUIRED };
 
-  const [sessionRes, listRes, setsRes, profileRes, catalogRes] = await Promise.all([
+  const [sessionRes, listRes, setsRes, profileRes, catalogRes, partnerSetsRes, rosterRes, buddyRes] = await Promise.all([
     supabase
       .from("workout_sessions")
       .select("id, name, status, started_at, ended_at, host_id")
@@ -247,11 +272,24 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
       .from("exercises")
       .select("id, name, category, primary_equipment, notes, is_custom")
       .order("name", { ascending: true }),
+    supabase.from("workout_sets").select(SET_COLUMNS).eq("session_id", sessionId).neq("user_id", user.id).order("set_order"),
+    supabase.from("session_participants").select("user_id, status").eq("session_id", sessionId),
+    supabase.from("buddy_links").select("requester_id, addressee_id").eq("status", "accepted").limit(1),
   ]);
 
   const session = sessionRes.data;
   if (!session) return { error: "Workout not found" };
   if (listRes.error || setsRes.error) return { error: "Couldn't load this workout" };
+
+  let buddy: WorkoutData["buddy"] = null;
+  const link = buddyRes.data?.[0];
+  if (link) {
+    const buddyId = link.requester_id === user.id ? link.addressee_id : link.requester_id;
+    const { data: bp } = await supabase.from("profiles").select("id, display_name").eq("id", buddyId).maybeSingle();
+    if (bp) buddy = { id: bp.id, displayName: bp.display_name };
+  }
+
+  const roster = await buildRoster(supabase, user.id, session.host_id, rosterRes.data ?? []);
 
   const list = listRes.data ?? [];
   const exerciseIds = list.map((l) => l.exercise_id);
@@ -301,6 +339,9 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
   return {
     data: {
       userId: user.id,
+      roster,
+      buddy,
+      partnerSets: partnerSetsRes.data ?? [],
       unit: profileRes.data?.preferred_unit === "lb" ? "lb" : "kg",
       session: {
         id: session.id,
@@ -452,5 +493,175 @@ export async function discardWorkoutAction(sessionId: string): Promise<ActionRes
   if (error || !data || data.length === 0) return { error: "Couldn't discard this workout" };
 
   revalidatePath("/");
+  return { success: true };
+}
+
+type Supa = Awaited<ReturnType<typeof createClient>>;
+
+async function buildRoster(
+  supabase: Supa,
+  myId: string,
+  hostId: string,
+  rows: Array<{ user_id: string; status: string }>
+): Promise<RosterEntry[]> {
+  const ids = [...new Set(rows.map((r) => r.user_id))];
+  const names = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data } = await supabase.from("profiles").select("id, display_name").in("id", ids);
+    for (const p of data ?? []) names.set(p.id, p.display_name);
+  }
+  return rows.map((r) => ({
+    userId: r.user_id,
+    name: names.get(r.user_id) ?? "Buddy",
+    status: r.status,
+    isMe: r.user_id === myId,
+    isHost: r.user_id === hostId,
+  }));
+}
+
+export type SyncData = {
+  status: string;
+  endedAt: string | null;
+  roster: RosterEntry[];
+  mySets: SetRow[];
+  partnerSets: SetRow[];
+};
+
+/** Authoritative snapshot used to recover after a reconnect (or a missed realtime event). */
+export async function getSessionSyncAction(sessionId: string): Promise<ActionResult<SyncData>> {
+  if (!idSchema.safeParse(sessionId).success) return { error: "Workout not found" };
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+
+  const [sessionRes, setsRes, rosterRes] = await Promise.all([
+    supabase.from("workout_sessions").select("status, ended_at, host_id").eq("id", sessionId).maybeSingle(),
+    supabase.from("workout_sets").select(SET_COLUMNS).eq("session_id", sessionId).order("set_order"),
+    supabase.from("session_participants").select("user_id, status").eq("session_id", sessionId),
+  ]);
+  if (!sessionRes.data || setsRes.error) return { error: "Couldn't refresh this workout" };
+
+  const all = setsRes.data ?? [];
+  return {
+    data: {
+      status: sessionRes.data.status,
+      endedAt: sessionRes.data.ended_at,
+      roster: await buildRoster(supabase, user.id, sessionRes.data.host_id, rosterRes.data ?? []),
+      mySets: all.filter((s) => s.user_id === user.id),
+      partnerSets: all.filter((s) => s.user_id !== user.id),
+    },
+  };
+}
+
+/** Invitations waiting for me (live sessions only), plus my id for the realtime filter. */
+export async function getPendingInvitesAction(): Promise<ActionResult<{ userId: string; invites: PendingInvite[] }>> {
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+
+  const { data, error } = await supabase
+    .from("session_participants")
+    .select("session_id, invited_by, workout_sessions!inner(id, name, status)")
+    .eq("user_id", user.id)
+    .eq("status", "invited")
+    .eq("workout_sessions.status", "in_progress");
+  if (error) return { error: "Couldn't check invitations" };
+
+  const hostIds = [...new Set((data ?? []).map((d) => d.invited_by).filter((x): x is string => Boolean(x)))];
+  const hostNames = new Map<string, string>();
+  if (hostIds.length > 0) {
+    const { data: profiles } = await supabase.from("profiles").select("id, display_name").in("id", hostIds);
+    for (const p of profiles ?? []) hostNames.set(p.id, p.display_name);
+  }
+
+  const invites: PendingInvite[] = (data ?? []).map((d) => {
+    const s = Array.isArray(d.workout_sessions) ? d.workout_sessions[0] : d.workout_sessions;
+    return {
+      sessionId: d.session_id,
+      name: s?.name ?? "Workout",
+      hostName: (d.invited_by && hostNames.get(d.invited_by)) || "Your buddy",
+    };
+  });
+  return { data: { userId: user.id, invites } };
+}
+
+export type SessionAccess =
+  | { state: "invited"; sessionId: string; name: string; hostName: string }
+  | { state: "member" }
+  | { state: "none" };
+
+/** Which screen should /session/[id] show for me? An invitee must confirm before seeing anything. */
+export async function getSessionAccessAction(sessionId: string): Promise<ActionResult<SessionAccess>> {
+  if (!idSchema.safeParse(sessionId).success) return { data: { state: "none" } };
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+
+  const { data: me } = await supabase
+    .from("session_participants")
+    .select("status, invited_by, workout_sessions!inner(name, status, host_id)")
+    .eq("session_id", sessionId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!me) return { data: { state: "none" } };
+
+  if (me.status === "invited") {
+    const s = Array.isArray(me.workout_sessions) ? me.workout_sessions[0] : me.workout_sessions;
+    if (!s || s.status !== "in_progress") return { data: { state: "none" } };
+    let hostName = "Your buddy";
+    if (me.invited_by) {
+      const { data: p } = await supabase.from("profiles").select("display_name").eq("id", me.invited_by).maybeSingle();
+      if (p) hostName = p.display_name;
+    }
+    return { data: { state: "invited", sessionId, name: s.name, hostName } };
+  }
+  return { data: { state: me.status === "joined" || me.status === "left" ? "member" : "none" } };
+}
+
+export async function joinWorkoutAction(sessionId: string): Promise<ActionResult> {
+  if (!idSchema.safeParse(sessionId).success) return { error: "Invalid workout" };
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+
+  const { error } = await supabase.rpc("join_workout_session", { p_session_id: sessionId });
+  if (error) return { error: rpcMessage(error) };
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function declineWorkoutAction(sessionId: string): Promise<ActionResult> {
+  if (!idSchema.safeParse(sessionId).success) return { error: "Invalid workout" };
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+
+  const { error } = await supabase.rpc("decline_workout_session", { p_session_id: sessionId });
+  if (error) return { error: rpcMessage(error) };
+  return { success: true };
+}
+
+/** A non-host marks their own part done; the session keeps running for the host. */
+export async function finishMyWorkoutAction(sessionId: string): Promise<ActionResult> {
+  if (!idSchema.safeParse(sessionId).success) return { error: "Invalid workout" };
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+
+  const { error } = await supabase.rpc("finish_my_workout", { p_session_id: sessionId });
+  if (error) return { error: rpcMessage(error) };
+  revalidatePath("/");
+  return { success: true };
+}
+
+/** Invite my buddy into a workout I already started. */
+export async function inviteBuddyAction(sessionId: string): Promise<ActionResult> {
+  if (!idSchema.safeParse(sessionId).success) return { error: "Invalid workout" };
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+
+  const { error } = await supabase.rpc("invite_buddy_to_session", { p_session_id: sessionId });
+  if (error) return { error: rpcMessage(error) };
   return { success: true };
 }
