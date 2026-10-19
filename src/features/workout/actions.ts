@@ -40,7 +40,8 @@ export type SetRow = {
   id: string;
   exercise_id: string;
   user_id: string;
-  last_edited_by: string;
+  /** Null when the editor's account was deleted. */
+  last_edited_by: string | null;
   set_order: number;
   set_type: string;
   weight_kg: number;

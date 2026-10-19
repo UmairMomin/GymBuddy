@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated output (the e2e suite builds into its own directory) and the service worker (plain JS for
+    // the worker global scope, not part of the app bundle).
+    ".next-e2e/**",
+    "test-results/**",
+    "playwright-report/**",
+    "public/sw.js",
   ]),
 ]);
 

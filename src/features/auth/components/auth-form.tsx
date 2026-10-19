@@ -19,7 +19,8 @@ export function AuthForm() {
     setLoading(true);
     setError(null);
 
-    const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     const action = isSignUp ? signUpAction : signInAction;
     const res = await action(formData);
 
@@ -32,6 +33,11 @@ export function AuthForm() {
       const destination = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
       router.replace(destination);
       router.refresh();
+      // Next keeps this page's client state alive while you are signed in, so leave the form pristine for
+      // the next visit (after logging out): not stuck "loading", not on the sign-up tab, no password left in the DOM.
+      form.reset();
+      setLoading(false);
+      setIsSignUp(false);
     }
   }
 

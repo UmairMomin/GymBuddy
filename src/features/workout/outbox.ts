@@ -95,3 +95,16 @@ export function matchEntryToRow(rows: readonly RowLike[], entry: Pick<OutboxEntr
   if (byId >= 0) return byId;
   return rows.findIndex((r) => !r.saved && r.order === entry.set_order && r.weight === "" && r.reps === "");
 }
+
+/**
+ * Remove an entry only if it is still the one that was sent. A newer edit to the same set may have replaced it
+ * while the request was in flight, and that newer intent must stay queued.
+ */
+export function removeEntryIfStamp(entries: readonly OutboxEntry[], id: string, stamp: number): OutboxEntry[] {
+  return entries.filter((e) => !(e.id === id && e.queued_at === stamp));
+}
+
+/** Strictly increasing timestamps, so two writes in the same millisecond still get distinct stamps. */
+export function nextStamp(last: number, now: number): number {
+  return Math.max(now, last + 1);
+}

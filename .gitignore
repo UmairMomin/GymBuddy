@@ -34,3 +34,8 @@ supabase/.temp
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Playwright
+/.next-e2e
+/test-results
+/playwright-report

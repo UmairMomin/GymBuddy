@@ -9,7 +9,7 @@ type Row = {
   id: string;
   created_at: string;
   user_id: string;
-  last_edited_by: string;
+  last_edited_by: string | null;
   set_order: number;
   set_type: string;
   weight_kg: number;
@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     volume_kg: Number(s.weight_kg) * s.reps,
     rpe: s.rpe,
     completed: s.completed,
-    edited_by_buddy: s.last_edited_by !== s.user_id,
+    edited_by_buddy: s.last_edited_by !== null && s.last_edited_by !== s.user_id,
     notes: s.notes,
   }));
 

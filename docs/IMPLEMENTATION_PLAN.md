@@ -269,7 +269,7 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
 - **Verification**: ESLint clean across `src`; type-check has 1 remaining error, in V1 `src/features/analytics/actions.ts` (replaced in M20); DB flow test `supabase/tests/workout_flow.sql` passes (start from routine, idempotent start, one live session per host, duplicate set id rejected, stale revision write rejected, edit after finish, discard). UI checked at 375px in the browser pane with a temporary mock-data fixture (removed): Today (incl. weekday highlight), workout screen, placeholder-accept ✓, rest timer dock. Found and fixed a hydration mismatch on the elapsed clock and a pre-hydration "Rest day" flash.
 
 ## Milestone 19: Live Buddy Sessions
-- **Status**: CODE COMPLETE, NOT VERIFIED END-TO-END. The live transport (Realtime channel, presence, broadcast) has not been exercised with two real signed-in devices; see the manual checklist below.
+- **Status**: COMPLETED. Verified end-to-end in Milestone 22 with two real accounts in two browser contexts over the real Realtime channel (`e2e/shared.spec.ts`). A check on two physical phones is still worthwhile for iOS-specific behaviour (backgrounding, push).
 - **Objective**: Invite a buddy into a workout and log together in real time.
 - **Acceptance Criteria**:
   - [x] "Train with <buddy>" toggle on Today (default off) creates an `invited` participant via `start_workout_session`; host can also invite mid-workout (`invite_buddy_to_session`).
@@ -279,7 +279,7 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
   - [x] Two-lane logging: your rows and your buddy's rows per set; either person can edit either lane (also after finish) and rows show "edited by". Revision-checked writes; incoming events adopt only strictly newer revisions; writes in flight are never overwritten.
   - [x] Reconnect: every subscribe/reconnect fetches an authoritative snapshot (`getSessionSyncAction`) and reconciles (`sync.ts`: add / adopt / remove, skipping in-flight writes).
   - [x] Host finishes for everyone; a non-host "Finish my workout" only completes their own part.
-  - [ ] **Manual two-device check** (needs two accounts that are buddies): (1) A starts Push with buddy on; B's banner appears and Join works; (2) A logs a set, it appears in B's lane within ~1s, and vice versa; (3) B edits A's weight, A sees the change and "edited by Sam"; (4) airplane-mode B for 20s while A logs, then reconnect: B catches up; (5) rest timer started by A counts down on B; (6) A finishes; B can still edit a set afterwards.
+  - [x] Two-account check (automated in `e2e/shared.spec.ts`; the same steps as a manual phone checklist): (1) A starts Push with buddy on; B's banner appears and Join works; (2) A logs a set, it appears in B's lane within ~1s, and vice versa; (3) B edits A's weight, A sees the change and "edited by Sam"; (4) airplane-mode B for 20s while A logs, then reconnect: B catches up; (5) rest timer started by A counts down on B; (6) A finishes; B can still edit a set afterwards.
 - **Not built / limits**: no Web Push (M21: invite arrives via banner when the app is open, or via the share link); the buddy lane only shows exercises that are also in your own list; local offline write queue is M21 (a failed write shows an error and can be retried by tapping).
 - **Verification**: ESLint clean; unit tests `pnpm test` (9 passing: merge/reconcile rules, rest payload validation); DB tests `supabase/tests/buddy_session.sql` (invite → join copies host list → finish own part vs host finish → decline/re-invite → leave; channel writes denied to an invitee and a stranger, allowed to a joined member) plus all earlier DB tests re-run, all `ALL_PASSED`. UI checked at 375px with a mock-data fixture (removed): two-lane view, "waiting for buddy" state. Only remaining type error: V1 `analytics/actions.ts` (M20).
 
@@ -296,7 +296,7 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
 - **Verification**: `pnpm test` 24 passing (Brzycki + volume, aggregate/PR rules incl. edit-after-finish, CSV escaping, sync rules); ESLint clean; type-check clean for source (the only reported errors are stale generated `.next/types` for the deleted `/group` route); **`next build` of a clean copy succeeded**: Turbopack compile, TypeScript pass and all 13 routes generated. UI checked at 375px with mock data in lb (removed).
 
 ## Milestone 21: PWA Polish & Web Push
-- **Status**: CODE COMPLETE; push delivery and the reload-replay path are not verified on a real device.
+- **Status**: COMPLETED except push delivery, which needs a real iPhone. The offline write path (offline → queue → sync → reload) is covered by `e2e/offline.spec.ts`; the write-ahead outbox also makes a write survive the app closing mid-request.
 - **Objective**: Make the installable iPhone PWA excellent and add background invites.
 - **Acceptance Criteria**:
   - [x] Install: PNG icons (192 / 512 / maskable / 180 apple-touch) in the Iron Black palette, full manifest (`id`, `scope`, theme colors, categories), `apple-touch-icon` metadata, and an `InstallPrompt` on Today (iOS: Share → Add to Home Screen steps; Chromium: native install button; dismissible; hidden once installed).
@@ -310,10 +310,19 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
 - **Verification**: `pnpm test` 37 passing; ESLint clean; type-check clean for source; `next build` of a clean copy succeeded (13 routes); `/sw.js` served with `no-store` + restrictive CSP; DB test `push_targets` and all earlier DB tests `ALL_PASSED`. Offline path exercised in the browser pane with a simulated network failure: set saved locally, banner and row note shown, entry persisted. The reload-replay path could not be shown in the pane (it was hidden, which stalls React streaming), so that path is covered by unit tests of its logic only.
 
 ## Milestone 22: Verification & Consistency Pass
-- **Status**: NOT STARTED
+- **Status**: COMPLETED
 - **Objective**: Prove the restructure and remove inconsistencies.
 - **Acceptance Criteria**:
-  - [ ] Full RLS audit and policy tests pass.
-  - [ ] Playwright e2e: solo workout, two-user shared workout, edit-after-finish, offline/reconnect.
-  - [ ] No remaining references to workspaces/groups; UI components, spacing and dialogs consistent with the Iron Black theme.
-  - [ ] `pnpm type-check`, `pnpm lint`, tests, and `pnpm build` all pass with recorded output.
+  - [x] Automated RLS / privilege audit `supabase/tests/rls_audit.sql`: every public table has RLS and policies; no policy for `public`/`anon`; no blanket-`true` write or select policies; every `SECURITY DEFINER` function pins `search_path`; nothing executable by `anon`; trigger functions not callable by clients; Realtime tables are RLS-protected and `realtime.messages` policies exist; no email column on `profiles`; no V1 tables. Plus the behavioural suites (`rls_buddy`, `plan_seed`, `workout_flow`, `buddy_session`, `push_targets`). All `ALL_PASSED`.
+  - [x] Playwright e2e (`pnpm test:e2e`, 6 tests, ~2.5 min): route protection and bad credentials; sign up → log out → sign back in; solo workout (starter plan, placeholders, finish, History totals, edit after finish recomputes History, immediate reload keeps the data); **two-user shared workout** (buddy link, invite banner, join, live logging both ways, mutual edit with "edited by", shared rest timer, host finish reaches the buddy, edit after finish persists, History for both, privacy); stranger cannot open someone else's workout; offline logging syncs on reconnect.
+  - [x] No remaining references to workspaces/groups in code; `AGENTS.md` and `.agents/rules/*` updated to the V2 model.
+  - [x] `pnpm test` (40 unit tests), `pnpm lint`, `pnpm type-check` and `next build` all pass.
+- **Bugs found and fixed by this milestone**:
+  1. **Login form stuck after logging out** (real user-facing bug): the form stayed in its spinner/disabled state because Next preserves the page's client state while you are signed in. The form now resets after sign-in.
+  2. **A set write could be lost if the app closed mid-request**: the outbox is now write-ahead (recorded before sending, removed when the server answers, newer edits are never removed by an older request).
+  3. **Deleting an account that had edited a buddy's set would have been blocked** (`last_edited_by` was `ON DELETE RESTRICT`): now `SET NULL`, and the stamping trigger ignores that referential action.
+  4. Trigger functions were executable by `authenticated` (not exploitable, fixed for hygiene; found by the audit).
+  5. Body-metrics dates: un-pinned locale (hydration mismatch) and UTC parsing (off by one day west of UTC).
+- **How e2e runs**: builds into an isolated `.next-e2e` on port 3100 and uses the installed Google Chrome. It creates throwaway accounts named `zz_e2e_*` in the project from `.env.local`; global setup and teardown delete them (and everything they created) even when a test fails. Needs `SUPABASE_ACCESS_TOKEN` in `.env.local` for that cleanup. Prefer a separate Supabase project for CI.
+- **Remaining manual checks (need a physical iPhone)**: add to Home Screen, enable notifications and receive a push with the app closed, backgrounding behaviour during a workout.
+

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_AGE_MS,
   matchEntryToRow,
+  nextStamp,
   outboxKey,
   readOutbox,
   removeEntry,
+  removeEntryIfStamp,
   upsertEntry,
   writeOutbox,
   type OutboxEntry,
@@ -118,5 +120,27 @@ describe("matchEntryToRow", () => {
   });
   it("returns -1 when there is no row for that set number", () => {
     expect(matchEntryToRow([row("a", 1)], { id: "gone", set_order: 5 })).toBe(-1);
+  });
+});
+
+describe("write-ahead helpers", () => {
+  it("removeEntryIfStamp keeps a newer intent queued while an older request finishes", () => {
+    const sent = entry({ id: "a", reps: 8, queued_at: 100 });
+    const newer = entry({ id: "a", reps: 9, queued_at: 101 });
+    const queue = upsertEntry([sent], newer); // user edited again mid-flight
+    expect(removeEntryIfStamp(queue, "a", 100)).toEqual([newer]); // old request done: newer stays
+    expect(removeEntryIfStamp(queue, "a", 101)).toEqual([]); // the newer one done: gone
+  });
+  it("removeEntryIfStamp leaves other sets alone", () => {
+    const q = [entry({ id: "a", queued_at: 1 }), entry({ id: "b", queued_at: 1 })];
+    expect(removeEntryIfStamp(q, "a", 1).map((e) => e.id)).toEqual(["b"]);
+  });
+  it("nextStamp is strictly increasing even within one millisecond", () => {
+    const a = nextStamp(0, 1000);
+    const b = nextStamp(a, 1000);
+    const c = nextStamp(b, 999); // clock went backwards
+    expect(b).toBeGreaterThan(a);
+    expect(c).toBeGreaterThan(b);
+    expect(nextStamp(5, 1000)).toBe(1000);
   });
 });

@@ -26,9 +26,10 @@ import {
 import { RestTimerDock, formatClock, useNow, type RestState } from "@/features/workout/components/rest-timer-dock";
 import {
   matchEntryToRow,
+  nextStamp,
   outboxKey,
   readOutbox,
-  removeEntry,
+  removeEntryIfStamp,
   upsertEntry,
   writeOutbox,
   type OutboxEntry,
@@ -86,7 +87,8 @@ function rowFromSet(set: SetRow, unit: "kg" | "lb", me: string, nameOf: (id: str
     completed: set.completed,
     saved: true,
     error: null,
-    editedBy: set.last_edited_by !== set.user_id ? (set.last_edited_by === me ? "you" : nameOf(set.last_edited_by)) : null,
+    editedBy:
+      set.last_edited_by && set.last_edited_by !== set.user_id ? (set.last_edited_by === me ? "you" : nameOf(set.last_edited_by)) : null,
     queued: false,
   };
 }
@@ -113,6 +115,7 @@ function parseReps(raw: string): number | null {
 function SetRowView({
   row,
   label,
+  number,
   tone,
   unit,
   placeholder,
@@ -123,7 +126,10 @@ function SetRowView({
   onToggle,
 }: {
   row: Row;
+  /** What the set badge shows (a number for you, the buddy's initial for their lane). */
   label: string;
+  /** The set's number, for assistive tech and tests. */
+  number: number;
   tone: Lane;
   unit: "kg" | "lb";
   placeholder: { weight: string; reps: string };
@@ -148,7 +154,7 @@ function SetRowView({
           <input
             key={field}
             inputMode={field === "weight" ? "decimal" : "numeric"}
-            aria-label={`${who} set ${label} ${field === "weight" ? `weight (${unit})` : "reps"}`}
+            aria-label={`${who} set ${number} ${field === "weight" ? `weight (${unit})` : "reps"}`}
             value={row[field]}
             placeholder={field === "weight" ? placeholder.weight : placeholder.reps}
             onChange={(e) => onField(field, e.target.value)}
@@ -167,7 +173,7 @@ function SetRowView({
         <button
           type="button"
           onClick={onToggle}
-          aria-label={row.completed ? `${who} set ${label} logged, tap to undo` : `Log ${who} set ${label}`}
+          aria-label={row.completed ? `${who} set ${number} logged, tap to undo` : `Log ${who} set ${number}`}
           aria-pressed={row.completed}
           className={cn(
             "flex items-center justify-center rounded-2xl border-2 transition-transform active:scale-95",
@@ -278,18 +284,20 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   }
 
   // ---- writes ---------------------------------------------------------------------------------
-  // ---- offline outbox -------------------------------------------------------------------------
+  // ---- outbox (write-ahead log) ------------------------------------------------------------------
+  // Every set write is recorded here BEFORE it is sent and removed when the server answers. If the app is
+  // closed mid-request, or the connection drops, the write is still on the device and is replayed later.
   const storageKey = outboxKey(userId, session.id);
+  const stamp = React.useRef(0);
   const readQueue = () => readOutbox(safeStorage(), storageKey, nowMs());
+  /** Banner count: entries waiting on a retry, not ones whose request is simply still in flight. */
+  const refreshQueuedCount = () => setQueuedCount(readQueue().filter((e) => !pending.current.has(e.id)).length);
   const writeQueue = (list: OutboxEntry[]) => {
     writeOutbox(safeStorage(), storageKey, list);
-    setQueuedCount(list.length);
+    refreshQueuedCount();
   };
   const enqueue = (entry: OutboxEntry) => writeQueue(upsertEntry(readQueue(), entry));
-  const dequeue = (id: string) => {
-    const cur = readQueue();
-    if (cur.some((e) => e.id === id)) writeQueue(removeEntry(cur, id));
-  };
+  const dequeueSent = (id: string, sentStamp: number) => writeQueue(removeEntryIfStamp(readQueue(), id, sentStamp));
 
   /** Apply the server's answer for one set (revision, or the winning values on a conflict). */
   function applySaveResult(exId: string, row: Row, res: SaveSetResult) {
@@ -321,41 +329,48 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       reps: values.reps,
       completed: values.completed,
     };
+    const entry: OutboxEntry = { ...payload, queued_at: (stamp.current = nextStamp(stamp.current, nowMs())) };
+    enqueue(entry); // write-ahead: survives the tab closing while the request is in flight
     const run = async () => {
       let res: SaveSetResult;
       try {
         res = await saveSetAction({ ...payload, expected_revision: revisions.current.get(row.id) ?? null });
       } catch {
-        enqueue({ ...payload, queued_at: nowMs() });
+        // No answer (offline, or the request was cut off): the entry stays queued and is replayed later.
         patchRow(e.id, row.id, { queued: true, error: null });
         return;
       }
-      dequeue(row.id);
+      dequeueSent(row.id, entry.queued_at);
       applySaveResult(e.id, row, res);
     };
     const prior = queues.current.get(row.id) ?? Promise.resolve();
     pending.current.add(row.id);
     const p: Promise<unknown> = prior.then(run, run).finally(() => {
-      if (queues.current.get(row.id) === p) pending.current.delete(row.id);
+      if (queues.current.get(row.id) === p) {
+        pending.current.delete(row.id);
+        refreshQueuedCount();
+      }
     });
     queues.current.set(row.id, p);
   }
 
   /** Replay one queued write through the same per-set queue. Resolves false while still offline. */
   function sendQueued(entry: OutboxEntry): Promise<boolean> {
-    const { queued_at: _queuedAt, ...payload } = entry;
-    void _queuedAt;
+    const { queued_at: sentStamp, ...payload } = entry;
     const exId = exercisesRef.current.find((x) => x.exercise_id === entry.exercise_id)?.id;
     const run = async (): Promise<boolean> => {
+      // The request that originally sent this may have finished (or been superseded) while we waited our turn.
+      if (!readQueue().some((e) => e.id === entry.id && e.queued_at === sentStamp)) return true;
       let res: SaveSetResult;
       try {
         res = await saveSetAction({ ...payload, expected_revision: revisions.current.get(entry.id) ?? null });
       } catch {
         return false;
       }
-      dequeue(entry.id);
+      dequeueSent(entry.id, sentStamp);
       if (exId) {
-        const row = [...(exercisesRef.current.find((x) => x.id === exId)?.rows ?? []), ...(exercisesRef.current.find((x) => x.id === exId)?.partnerRows ?? [])].find((r) => r.id === entry.id);
+        const ex = exercisesRef.current.find((x) => x.id === exId);
+        const row = [...(ex?.rows ?? []), ...(ex?.partnerRows ?? [])].find((r) => r.id === entry.id);
         if (row) applySaveResult(exId, row, res);
       }
       return true;
@@ -364,7 +379,10 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     pending.current.add(entry.id);
     const p: Promise<boolean> = prior.then(run, run);
     const settled = p.finally(() => {
-      if (queues.current.get(entry.id) === settled) pending.current.delete(entry.id);
+      if (queues.current.get(entry.id) === settled) {
+        pending.current.delete(entry.id);
+        refreshQueuedCount();
+      }
     });
     queues.current.set(entry.id, settled);
     return p;
@@ -376,6 +394,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     flushing.current = true;
     try {
       for (const entry of readQueue()) {
+        if (pending.current.has(entry.id)) continue; // its own request is still in flight
         if (!(await sendQueued(entry))) break; // still offline: try again later
       }
     } finally {
@@ -861,6 +880,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
                           <SetRowView
                             row={row}
                             label={String(i + 1)}
+                            number={i + 1}
                             tone="me"
                             unit={unit}
                             who="Your"
@@ -874,6 +894,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
                             <SetRowView
                               row={theirs}
                               label={partnerName.slice(0, 1).toUpperCase()}
+                              number={i + 1}
                               tone="partner"
                               unit={unit}
                               who={`${partnerName}'s`}

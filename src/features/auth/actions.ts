@@ -79,7 +79,7 @@ export async function signUpAction(formData: FormData): Promise<AuthActionResult
     password: validated.data.password,
     options: {
       data: {
-        // Shown in the app (profile menu, group, sessions); the username is only the login id.
+        // Shown in the app (profile menu, buddy, workouts); the username is only the login id.
         display_name: validated.data.name,
       },
     },

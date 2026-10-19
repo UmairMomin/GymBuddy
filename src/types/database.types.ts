@@ -489,7 +489,7 @@ export type Database = {
           created_at: string
           exercise_id: string
           id: string
-          last_edited_by: string
+          last_edited_by: string | null
           notes: string | null
           reps: number
           revision_number: number
@@ -506,7 +506,7 @@ export type Database = {
           created_at?: string
           exercise_id: string
           id?: string
-          last_edited_by: string
+          last_edited_by?: string | null
           notes?: string | null
           reps?: number
           revision_number?: number
@@ -523,7 +523,7 @@ export type Database = {
           created_at?: string
           exercise_id?: string
           id?: string
-          last_edited_by?: string
+          last_edited_by?: string | null
           notes?: string | null
           reps?: number
           revision_number?: number

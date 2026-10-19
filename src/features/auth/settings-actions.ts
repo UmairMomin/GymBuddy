@@ -40,7 +40,7 @@ export async function getUserProfileSettingsAction(): Promise<ActionResult<UserP
       data: {
         id: user.id,
         username: user.email?.split("@")[0] ?? "",
-        displayName: user.user_metadata?.display_name || user.email?.split("@")[0] || "Trainee",
+        displayName: user.user_metadata?.display_name || user.email?.split("@")[0] || "You",
         preferredUnit: "kg",
       },
     };

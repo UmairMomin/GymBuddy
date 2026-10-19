@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The e2e suite builds into its own directory so it never clobbers a running `next dev`.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   /* config options here */
   // Lets a phone on the same Wi-Fi load the dev server via the laptop's LAN IP (dev only).
   allowedDevOrigins: ["192.168.*.*", "10.*.*.*"],
