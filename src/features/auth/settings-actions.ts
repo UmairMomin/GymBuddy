@@ -79,7 +79,7 @@ export async function updatePreferredUnitAction(unit: "kg" | "lb"): Promise<Acti
   }
 
   revalidatePath("/", "layout");
-  revalidatePath("/analytics");
+  revalidatePath("/history");
   return { success: true };
 }
 

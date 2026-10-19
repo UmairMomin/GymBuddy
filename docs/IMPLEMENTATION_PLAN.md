@@ -284,12 +284,16 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
 - **Verification**: ESLint clean; unit tests `pnpm test` (9 passing: merge/reconcile rules, rest payload validation); DB tests `supabase/tests/buddy_session.sql` (invite → join copies host list → finish own part vs host finish → decline/re-invite → leave; channel writes denied to an invitee and a stranger, allowed to a joined member) plus all earlier DB tests re-run, all `ALL_PASSED`. UI checked at 375px with a mock-data fixture (removed): two-lane view, "waiting for buddy" state. Only remaining type error: V1 `analytics/actions.ts` (M20).
 
 ## Milestone 20: History
-- **Status**: NOT STARTED
+- **Status**: COMPLETED (signed-in data path not yet exercised against real rows)
 - **Objective**: Merge analytics into **History** and keep body metrics and exports.
 - **Acceptance Criteria**:
-  - [ ] Past sessions list (solo and shared), PRs, volume/1RM charts, body metrics, CSV/JSON export.
-  - [ ] Totals and PRs recompute after post-finish edits.
-  - [ ] `/analytics` route retired or redirected.
+  - [x] `/history`: totals (workouts, sets, volume), personal records (best weight per exercise with est. 1RM), volume / strength / muscle-balance charts, expandable past sessions (solo or "with <buddy>") with a link to view or correct sets, body metrics (weight, body fat), CSV / JSON export.
+  - [x] Everything is derived from live sets (`features/history/aggregate.ts`), so totals and PRs reflect edits made after a workout, by you or your buddy. Unit-tested.
+  - [x] kg/lb preference respected everywhere (volume, records, charts, body weight entry and display).
+  - [x] `/analytics` redirects to `/history`; nav History points at `/history`; V1 `features/analytics` removed; export route rewritten for the new schema (own sets only, paged, formula-safe CSV, "edited by buddy" column).
+  - [x] Body metric input validated with Zod.
+  - [ ] Manual check with real data (finish a workout, edit a set afterwards, confirm History updates).
+- **Verification**: `pnpm test` 24 passing (Brzycki + volume, aggregate/PR rules incl. edit-after-finish, CSV escaping, sync rules); ESLint clean; type-check clean for source (the only reported errors are stale generated `.next/types` for the deleted `/group` route); **`next build` of a clean copy succeeded**: Turbopack compile, TypeScript pass and all 13 routes generated. UI checked at 375px with mock data in lb (removed).
 
 ## Milestone 21: PWA Polish & Web Push
 - **Status**: NOT STARTED

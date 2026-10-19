@@ -1,5 +1,6 @@
-import { RebuildNotice } from "@/components/layout/rebuild-notice";
+import { redirect } from "next/navigation";
 
-export default function AnalyticsPage() {
-  return <RebuildNotice title="History" milestone="Milestone 20" />;
+/** Analytics merged into History. Kept so old links and bookmarks still work. */
+export default function AnalyticsRedirect() {
+  redirect("/history");
 }

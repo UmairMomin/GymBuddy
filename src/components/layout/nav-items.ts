@@ -6,8 +6,7 @@ export type NavItem = { label: string; href: string; icon: LucideIcon; match?: s
 export const NAV_ITEMS: NavItem[] = [
   { label: "Today", href: "/", icon: Dumbbell, match: ["/session"] },
   { label: "Plan", href: "/plan", icon: Calendar },
-  // The route is renamed to /history in Milestone 20 when analytics merge into it.
-  { label: "History", href: "/analytics", icon: BarChart3 },
+  { label: "History", href: "/history", icon: BarChart3 },
   { label: "Buddy", href: "/buddy", icon: Users },
 ];
 

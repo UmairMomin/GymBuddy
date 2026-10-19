@@ -1,108 +1,100 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { csvRow } from "@/lib/csv";
 
+const PAGE = 1000;
+const MAX_PAGES = 50;
+
+type Row = {
+  id: string;
+  created_at: string;
+  user_id: string;
+  last_edited_by: string;
+  set_order: number;
+  set_type: string;
+  weight_kg: number;
+  reps: number;
+  rpe: number | null;
+  completed: boolean;
+  notes: string | null;
+  exercises: { name: string; category: string; primary_equipment: string | null } | null;
+  workout_sessions: { name: string; started_at: string; ended_at: string | null; status: string } | null;
+};
+
+/** Download my own sets (both lanes of shared workouts are mine only when user_id is me). */
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const format = searchParams.get("format") || "json";
+  const format = new URL(request.url).searchParams.get("format") === "csv" ? "csv" : "json";
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const rows: Row[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const { data, error } = await supabase
+      .from("workout_sets")
+      .select(
+        "id, created_at, user_id, last_edited_by, set_order, set_type, weight_kg, reps, rpe, completed, notes, exercises(name, category, primary_equipment), workout_sessions(name, started_at, ended_at, status)"
+      )
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .range(page * PAGE, page * PAGE + PAGE - 1);
+    if (error) return NextResponse.json({ error: "Export failed" }, { status: 500 });
+    const chunk = (data ?? []) as unknown as Row[];
+    rows.push(...chunk);
+    if (chunk.length < PAGE) break;
   }
 
-  // Fetch all completed workouts and sets for user
-  const { data: sets, error } = await supabase
-    .from("workout_sets")
-    .select(`
-      id,
-      created_at,
-      set_order,
-      set_type,
-      weight_kg,
-      reps,
-      rpe,
-      completed,
-      notes,
-      exercises (name, category, primary_equipment),
-      workout_sessions (name, started_at, ended_at)
-    `)
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  const flattened = (sets || []).map((s) => ({
+  const flat = rows.map((s) => ({
     set_id: s.id,
     logged_at: s.created_at,
-    session_name: s.workout_sessions?.name || "Workout",
-    session_start: s.workout_sessions?.started_at,
-    session_end: s.workout_sessions?.ended_at,
-    exercise_name: s.exercises?.name,
-    category: s.exercises?.category,
-    equipment: s.exercises?.primary_equipment,
+    session_name: s.workout_sessions?.name ?? "Workout",
+    session_status: s.workout_sessions?.status ?? null,
+    session_start: s.workout_sessions?.started_at ?? null,
+    session_end: s.workout_sessions?.ended_at ?? null,
+    exercise_name: s.exercises?.name ?? null,
+    category: s.exercises?.category ?? null,
+    equipment: s.exercises?.primary_equipment ?? null,
     set_order: s.set_order,
     set_type: s.set_type,
-    weight_kg: s.weight_kg,
+    weight_kg: Number(s.weight_kg),
     reps: s.reps,
-    volume_kg: Number(s.weight_kg) * Number(s.reps),
+    volume_kg: Number(s.weight_kg) * s.reps,
     rpe: s.rpe,
     completed: s.completed,
+    edited_by_buddy: s.last_edited_by !== s.user_id,
     notes: s.notes,
   }));
 
+  const stamp = new Date().toISOString().slice(0, 10);
+
   if (format === "csv") {
-    const headers = [
-      "Logged At",
-      "Session Name",
-      "Exercise",
-      "Category",
-      "Equipment",
-      "Set #",
-      "Type",
-      "Weight (kg)",
-      "Reps",
-      "Volume (kg)",
-      "RPE",
-      "Completed",
-      "Notes",
-    ];
-
-    const rows = flattened.map((row) => [
-      row.logged_at,
-      `"${(row.session_name || "").replace(/"/g, '""')}"`,
-      `"${(row.exercise_name || "").replace(/"/g, '""')}"`,
-      row.category,
-      row.equipment || "",
-      row.set_order,
-      row.set_type,
-      row.weight_kg,
-      row.reps,
-      row.volume_kg,
-      row.rpe || "",
-      row.completed,
-      `"${(row.notes || "").replace(/"/g, '""')}"`,
+    const header = csvRow([
+      "Logged At", "Session", "Status", "Exercise", "Category", "Equipment", "Set #", "Type",
+      "Weight (kg)", "Reps", "Volume (kg)", "RPE", "Completed", "Edited by buddy", "Notes",
     ]);
-
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-
-    return new Response(csvContent, {
+    const body = flat.map((r) =>
+      csvRow([
+        r.logged_at, r.session_name, r.session_status, r.exercise_name, r.category, r.equipment, r.set_order,
+        r.set_type, r.weight_kg, r.reps, r.volume_kg, r.rpe, r.completed, r.edited_by_buddy, r.notes,
+      ])
+    );
+    return new Response([header, ...body].join("\n"), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="gym-tracker-export-${new Date().toISOString().slice(0, 10)}.csv"`,
+        "Content-Disposition": `attachment; filename="gym-tracker-export-${stamp}.csv"`,
+        "Cache-Control": "no-store",
       },
     });
   }
 
-  return new Response(JSON.stringify(flattened, null, 2), {
+  return new Response(JSON.stringify(flat, null, 2), {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="gym-tracker-export-${new Date().toISOString().slice(0, 10)}.json"`,
+      "Content-Disposition": `attachment; filename="gym-tracker-export-${stamp}.json"`,
+      "Cache-Control": "no-store",
     },
   });
 }

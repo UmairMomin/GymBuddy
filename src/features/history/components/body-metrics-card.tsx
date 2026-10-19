@@ -8,7 +8,7 @@ import {
   BodyMetricEntry,
   logBodyMetricAction,
   deleteBodyMetricAction,
-} from "@/features/analytics/body-metrics-actions";
+} from "@/features/history/body-metrics-actions";
 import {
   ResponsiveContainer,
   LineChart,
@@ -20,8 +20,9 @@ import {
 } from "recharts";
 import { UserCheck, Plus, Trash2, Loader2, AlertCircle, TrendingDown } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { toCanonicalKg, toPreferredWeight } from "@/lib/units";
 
-export function BodyMetricsCard({ initialMetrics }: { initialMetrics: BodyMetricEntry[] }) {
+export function BodyMetricsCard({ initialMetrics, unit }: { initialMetrics: BodyMetricEntry[]; unit: "kg" | "lb" }) {
   const router = useRouter();
   const [metrics, setMetrics] = React.useState<BodyMetricEntry[]>(initialMetrics);
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -40,11 +41,11 @@ export function BodyMetricsCard({ initialMetrics }: { initialMetrics: BodyMetric
         month: "short",
         day: "numeric",
       }),
-      weight: m.weight_kg,
+      weight: toPreferredWeight(m.weight_kg, unit),
       bodyFat: m.body_fat_percentage,
       notes: m.notes,
     }));
-  }, [metrics]);
+  }, [metrics, unit]);
 
   const latest = metrics[metrics.length - 1];
 
@@ -57,7 +58,7 @@ export function BodyMetricsCard({ initialMetrics }: { initialMetrics: BodyMetric
 
     const res = await logBodyMetricAction({
       recordedDate,
-      weightKg: w,
+      weightKg: toCanonicalKg(w, unit),
       bodyFatPercentage: bodyFat ? parseFloat(bodyFat) : undefined,
       notes: notes.trim() || undefined,
     });
@@ -110,7 +111,7 @@ export function BodyMetricsCard({ initialMetrics }: { initialMetrics: BodyMetric
             <div>
               <span className="text-[11px] uppercase text-zinc-500 font-semibold">Latest Weight</span>
               <p className="text-xl font-bold font-mono text-emerald-400">
-                {latest.weight_kg} <span className="text-xs text-zinc-400">kg</span>
+                {toPreferredWeight(latest.weight_kg, unit)} <span className="text-xs text-zinc-400">{unit}</span>
               </p>
             </div>
             {latest.body_fat_percentage && (
@@ -147,7 +148,7 @@ export function BodyMetricsCard({ initialMetrics }: { initialMetrics: BodyMetric
                       return (
                         <div className="rounded-lg border border-zinc-700 bg-zinc-950 p-2.5 shadow-xl text-xs space-y-1">
                           <p className="font-semibold text-zinc-200">{data.date}</p>
-                          <p className="font-mono text-emerald-400 font-bold">{data.weight} kg</p>
+                          <p className="font-mono text-emerald-400 font-bold">{data.weight} {unit}</p>
                           {data.bodyFat && (
                             <p className="font-mono text-zinc-300">{data.bodyFat}% Body Fat</p>
                           )}
@@ -192,7 +193,7 @@ export function BodyMetricsCard({ initialMetrics }: { initialMetrics: BodyMetric
                         day: "numeric",
                       })}
                     </span>
-                    <span className="font-bold font-mono text-emerald-400">{m.weight_kg} kg</span>
+                    <span className="font-bold font-mono text-emerald-400">{toPreferredWeight(m.weight_kg, unit)} {unit}</span>
                     {m.body_fat_percentage && (
                       <span className="text-zinc-400 font-mono">{m.body_fat_percentage}% BF</span>
                     )}
@@ -251,7 +252,7 @@ export function BodyMetricsCard({ initialMetrics }: { initialMetrics: BodyMetric
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-semibold text-zinc-300">Body Weight (kg) *</label>
+                    <label className="text-xs font-semibold text-zinc-300">Body Weight ({unit}) *</label>
                     <Input
                       type="number"
                       step="0.1"

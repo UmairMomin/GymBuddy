@@ -2,12 +2,20 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 export type ActionResult<T = unknown> = {
   data?: T;
   error?: string;
   success?: boolean;
 };
+
+const bodyMetricSchema = z.object({
+  recordedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date"),
+  weightKg: z.number().gt(0, "Enter your body weight").max(500, "Please enter a realistic body weight"),
+  bodyFatPercentage: z.number().min(0).max(100, "Body fat must be between 0 and 100").optional(),
+  notes: z.string().max(500).optional(),
+});
 
 export type BodyMetricEntry = {
   id: string;
@@ -71,18 +79,17 @@ export async function logBodyMetricAction(input: {
     return { error: "Must be signed in" };
   }
 
-  if (input.weightKg <= 0 || input.weightKg > 500) {
-    return { error: "Please enter a realistic body weight" };
-  }
+  const parsed = bodyMetricSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid measurement" };
 
   const { data, error } = await supabase
     .from("body_metrics")
     .insert({
       user_id: user.id,
-      recorded_date: input.recordedDate,
-      weight_kg: input.weightKg,
-      body_fat_percentage: input.bodyFatPercentage || null,
-      notes: input.notes?.trim() || null,
+      recorded_date: parsed.data.recordedDate,
+      weight_kg: parsed.data.weightKg,
+      body_fat_percentage: parsed.data.bodyFatPercentage ?? null,
+      notes: parsed.data.notes?.trim() || null,
     })
     .select("id")
     .single();
@@ -91,7 +98,7 @@ export async function logBodyMetricAction(input: {
     return { error: error.message };
   }
 
-  revalidatePath("/analytics");
+  revalidatePath("/history");
   return { success: true, data: { id: data.id } };
 }
 
@@ -118,6 +125,6 @@ export async function deleteBodyMetricAction(id: string): Promise<ActionResult> 
     return { error: error.message };
   }
 
-  revalidatePath("/analytics");
+  revalidatePath("/history");
   return { success: true };
 }

@@ -15,10 +15,11 @@ import {
   CartesianGrid,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { type SessionSummary } from "@/features/analytics/actions";
+import { type SessionSummary } from "@/features/history/aggregate";
+import { toPreferredWeight } from "@/lib/units";
 import { TrendingUp, Activity, PieChart as PieIcon } from "lucide-react";
 
-export function AnalyticsCharts({ sessions }: { sessions: SessionSummary[] }) {
+export function HistoryCharts({ sessions, unit }: { sessions: SessionSummary[]; unit: "kg" | "lb" }) {
   // Sort chronologically for charts (oldest to newest)
   const chronologicalSessions = React.useMemo(() => {
     return [...sessions].sort(
@@ -34,9 +35,9 @@ export function AnalyticsCharts({ sessions }: { sessions: SessionSummary[] }) {
         day: "numeric",
       }),
       name: s.name,
-      volume: Math.round(s.total_volume_kg),
+      volume: Math.round(toPreferredWeight(s.total_volume_kg, unit)),
     }));
-  }, [chronologicalSessions]);
+  }, [chronologicalSessions, unit]);
 
   // 2. All distinct exercise names for strength progression dropdown
   const allExerciseNames = React.useMemo(() => {
@@ -71,15 +72,15 @@ export function AnalyticsCharts({ sessions }: { sessions: SessionSummary[] }) {
             month: "short",
             day: "numeric",
           }),
-          topWeight: match.top_weight_kg,
-          estimated1RM: match.estimated_1rm,
+          topWeight: toPreferredWeight(match.top_weight_kg, unit),
+          estimated1RM: toPreferredWeight(match.estimated_1rm, unit),
           reps: match.top_reps,
         });
       }
     });
 
     return points;
-  }, [chronologicalSessions, activeExercise]);
+  }, [chronologicalSessions, activeExercise, unit]);
 
   // 3. Muscle category volume distribution
   const categoryData = React.useMemo(() => {
@@ -87,7 +88,7 @@ export function AnalyticsCharts({ sessions }: { sessions: SessionSummary[] }) {
     sessions.forEach((s) => {
       s.exercises_summary.forEach((ex) => {
         const cat = ex.category ? ex.category.toUpperCase() : "OTHER";
-        const estVol = ex.top_weight_kg * ex.top_reps * ex.sets_count;
+        const estVol = toPreferredWeight(ex.volume_kg, unit);
         if (!map.has(cat)) {
           map.set(cat, { category: cat, sets: ex.sets_count, volume: estVol });
         } else {
@@ -99,7 +100,7 @@ export function AnalyticsCharts({ sessions }: { sessions: SessionSummary[] }) {
     });
 
     return Array.from(map.values()).sort((a, b) => b.sets - a.sets);
-  }, [sessions]);
+  }, [sessions, unit]);
 
   if (sessions.length === 0) {
     return null;
@@ -114,7 +115,7 @@ export function AnalyticsCharts({ sessions }: { sessions: SessionSummary[] }) {
             <div>
               <CardTitle className="text-base font-bold text-zinc-100 flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-emerald-400" />
-                <span>Volume Progression (kg)</span>
+                <span>Volume Progression ({unit})</span>
               </CardTitle>
               <CardDescription className="text-xs text-zinc-400">
                 Total lifted tonnage per completed workout
@@ -156,7 +157,7 @@ export function AnalyticsCharts({ sessions }: { sessions: SessionSummary[] }) {
                           <p className="font-semibold text-zinc-200">{data.name}</p>
                           <p className="text-zinc-400 text-[11px]">{data.date}</p>
                           <p className="font-mono font-bold text-emerald-400">
-                            {Number(data.volume).toLocaleString()} kg volume
+                            {Number(data.volume).toLocaleString()} {unit} volume
                           </p>
                         </div>
                       );
@@ -235,10 +236,10 @@ export function AnalyticsCharts({ sessions }: { sessions: SessionSummary[] }) {
                               <p className="font-semibold text-zinc-200">{activeExercise}</p>
                               <p className="text-zinc-400 text-[11px]">{data.date}</p>
                               <p className="font-mono text-zinc-300">
-                                Top: <strong>{data.topWeight} kg</strong> × {data.reps} reps
+                                Top: <strong>{data.topWeight} {unit}</strong> × {data.reps} reps
                               </p>
                               <p className="font-mono font-bold text-emerald-400">
-                                Est. 1RM: {data.estimated1RM} kg
+                                Est. 1RM: {data.estimated1RM} {unit}
                               </p>
                             </div>
                           );
