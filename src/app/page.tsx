@@ -2,6 +2,11 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspaceAction, getRoutinesAction } from "@/features/routines/actions";
+import {
+  getUpcomingScheduledWorkoutsAction,
+  type ScheduledWorkoutItem,
+} from "@/features/scheduling/actions";
+import { UpcomingWorkoutsCard } from "@/features/scheduling/components/upcoming-workouts-card";
 import { StartSessionCard } from "@/features/sessions/components/start-session-card";
 import { Card } from "@/components/ui/card";
 import { Dumbbell, Users, History, BookOpen } from "lucide-react";
@@ -17,17 +22,28 @@ async function HomeDashboard({ routineId }: { routineId?: string }) {
   let workspaceId: string | undefined;
   let routineName: string | undefined;
   let routineVersionId: string | undefined;
+  let scheduledWorkouts: ScheduledWorkoutItem[] = [];
+  let availableRoutines: Array<{ id: string; name: string }> = [];
 
   if (user) {
     const wsRes = await getOrCreateDefaultWorkspaceAction();
     workspaceId = wsRes.data?.id;
 
-    if (workspaceId && routineId) {
-      const routinesRes = await getRoutinesAction(workspaceId);
-      const found = routinesRes.data?.find((r) => r.id === routineId);
-      if (found) {
-        routineName = found.name;
-        routineVersionId = found.routine_versions?.[0]?.id;
+    if (workspaceId) {
+      const [routinesRes, schedRes] = await Promise.all([
+        getRoutinesAction(workspaceId),
+        getUpcomingScheduledWorkoutsAction(workspaceId),
+      ]);
+
+      availableRoutines = (routinesRes.data || []).map((r) => ({ id: r.id, name: r.name }));
+      scheduledWorkouts = schedRes.data || [];
+
+      if (routineId) {
+        const found = routinesRes.data?.find((r) => r.id === routineId);
+        if (found) {
+          routineName = found.name;
+          routineVersionId = found.routine_versions?.[0]?.id;
+        }
       }
     }
   }
@@ -36,10 +52,11 @@ async function HomeDashboard({ routineId }: { routineId?: string }) {
     <div className="space-y-6">
       {/* Quick Status / Welcome banner */}
       <section className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">Train Together</h1>
-        <p className="text-sm text-zinc-400">
-          Track individually. Review progress together.
+        <p className="font-display text-sm font-bold uppercase tracking-widest text-zinc-400">
+          {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
         </p>
+        <h1 className="text-4xl font-extrabold leading-none tracking-wide">Train together</h1>
+        <p className="text-sm text-zinc-400">Track individually. Review progress together.</p>
       </section>
 
       {/* Primary Action: Start Session Card */}
@@ -49,6 +66,15 @@ async function HomeDashboard({ routineId }: { routineId?: string }) {
         routineVersionId={routineVersionId}
         routineName={routineName}
       />
+
+      {/* Upcoming Scheduled Workouts */}
+      {workspaceId && (
+        <UpcomingWorkoutsCard
+          workspaceId={workspaceId}
+          initialWorkouts={scheduledWorkouts}
+          routines={availableRoutines}
+        />
+      )}
 
       {/* Quick Access Grid */}
       <section className="grid grid-cols-3 gap-3">

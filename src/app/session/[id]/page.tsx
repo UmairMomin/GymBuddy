@@ -33,16 +33,15 @@ async function SessionContent({ sessionId }: { sessionId: string }) {
     );
   }
 
-  const [sessionRes, exercisesRes] = await Promise.all([
-    getActiveSessionAction(sessionId),
-    getExercisesAction(),
-  ]);
+  const sessionRes = await getActiveSessionAction(sessionId);
 
   if (sessionRes.error || !sessionRes.data?.session) {
     return notFound();
   }
 
   const { session, sets } = sessionRes.data;
+  // Built-in exercises plus this group's custom ones.
+  const exercisesRes = await getExercisesAction(session.workspace_id);
   const exercises = exercisesRes.data || [];
 
   return (

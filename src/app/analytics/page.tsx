@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getOrCreateDefaultWorkspaceAction } from "@/features/routines/actions";
 import { getCompletedSessionsAction } from "@/features/analytics/actions";
+import { getBodyMetricsAction } from "@/features/analytics/body-metrics-actions";
 import { AnalyticsDashboardView } from "@/features/analytics/components/analytics-dashboard-view";
 import { Loader2, Lock } from "lucide-react";
 import Link from "next/link";
@@ -24,7 +25,7 @@ async function AnalyticsContent() {
           Please sign in to view your workout logs and training analytics.
         </p>
         <Link href="/login">
-          <Button className="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold">
+          <Button className="bg-emerald-500 hover:bg-emerald-600 text-accent-ink font-semibold">
             Sign In to Continue
           </Button>
         </Link>
@@ -43,10 +44,15 @@ async function AnalyticsContent() {
     );
   }
 
-  const sessionsRes = await getCompletedSessionsAction(workspace.id);
-  const sessions = sessionsRes.data || [];
+  const [sessionsRes, bodyMetricsRes] = await Promise.all([
+    getCompletedSessionsAction(workspace.id),
+    getBodyMetricsAction(),
+  ]);
 
-  return <AnalyticsDashboardView sessions={sessions} />;
+  const sessions = sessionsRes.data || [];
+  const bodyMetrics = bodyMetricsRes.data || [];
+
+  return <AnalyticsDashboardView sessions={sessions} bodyMetrics={bodyMetrics} />;
 }
 
 export default function AnalyticsPage() {

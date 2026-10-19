@@ -12,6 +12,7 @@ export type SessionSummary = {
   exercises_count: number;
   exercises_summary: Array<{
     name: string;
+    category: string;
     sets_count: number;
     top_weight_kg: number;
     top_reps: number;
@@ -56,6 +57,7 @@ export async function getCompletedSessionsAction(workspaceId: string) {
       string,
       {
         name: string;
+        category: string;
         sets_count: number;
         top_weight_kg: number;
         top_reps: number;
@@ -76,9 +78,12 @@ export async function getCompletedSessionsAction(workspaceId: string) {
       // 1RM estimate via Brzycki formula
       const est1RM = reps === 1 ? weight : reps < 37 ? Math.round(weight * (36 / (37 - reps)) * 10) / 10 : weight;
 
+      const exCategory = set.exercises?.category || "other";
+
       if (!exMap.has(exId)) {
         exMap.set(exId, {
           name: exName,
+          category: exCategory,
           sets_count: 1,
           top_weight_kg: weight,
           top_reps: reps,

@@ -1,11 +1,14 @@
 "use server";
 
+import { requireUser, SIGN_IN_REQUIRED } from "@/lib/supabase/require-user";
 import { createClient } from "@/lib/supabase/server";
 import {
   createExerciseSchema,
   updateExerciseSchema,
   createRoutineSchema,
-  type PlannedExerciseItem,
+  updateRoutineSchema,
+  type CreateRoutineInput,
+  type UpdateRoutineInput,
 } from "@/features/routines/schemas";
 import { revalidatePath } from "next/cache";
 
@@ -53,7 +56,7 @@ export async function getOrCreateDefaultWorkspaceAction() {
   // 1. Look for existing membership
   const { data: memberships, error: memError } = await supabase
     .from("workspace_members")
-    .select("workspace_id, workspaces(id, name, description)")
+    .select("workspace_id, workspaces(id, name, description, invite_code)")
     .eq("user_id", user.id)
     .limit(1);
 
@@ -99,6 +102,7 @@ export async function createCustomExerciseAction(formData: FormData): Promise<Ac
     name: formData.get("name"),
     category: formData.get("category"),
     primary_equipment: formData.get("primary_equipment") || undefined,
+    handle_type: formData.get("handle_type") || undefined,
     notes: formData.get("notes") || undefined,
     workspace_id: formData.get("workspace_id"),
   };
@@ -109,12 +113,16 @@ export async function createCustomExerciseAction(formData: FormData): Promise<Ac
   }
 
   const supabase = await createClient();
+  if (!(await requireUser(supabase))) {
+    return { error: SIGN_IN_REQUIRED };
+  }
   const { data, error } = await supabase
     .from("exercises")
     .insert({
       name: validated.data.name,
       category: validated.data.category,
       primary_equipment: validated.data.primary_equipment ?? null,
+      handle_type: validated.data.handle_type ?? null,
       notes: validated.data.notes ?? null,
       workspace_id: validated.data.workspace_id,
       is_custom: true,
@@ -140,6 +148,7 @@ export async function updateCustomExerciseAction(formData: FormData): Promise<Ac
     name: formData.get("name"),
     category: formData.get("category"),
     primary_equipment: formData.get("primary_equipment") || undefined,
+    handle_type: formData.get("handle_type") || undefined,
     notes: formData.get("notes") || undefined,
   };
 
@@ -149,12 +158,16 @@ export async function updateCustomExerciseAction(formData: FormData): Promise<Ac
   }
 
   const supabase = await createClient();
+  if (!(await requireUser(supabase))) {
+    return { error: SIGN_IN_REQUIRED };
+  }
   const { data, error } = await supabase
     .from("exercises")
     .update({
       name: validated.data.name,
       category: validated.data.category,
       primary_equipment: validated.data.primary_equipment ?? null,
+      handle_type: validated.data.handle_type ?? null,
       notes: validated.data.notes ?? null,
     })
     .eq("id", validated.data.id)
@@ -176,6 +189,9 @@ export async function updateCustomExerciseAction(formData: FormData): Promise<Ac
  */
 export async function deleteCustomExerciseAction(exerciseId: string): Promise<ActionResult> {
   const supabase = await createClient();
+  if (!(await requireUser(supabase))) {
+    return { error: SIGN_IN_REQUIRED };
+  }
 
   // 1. Safety check: Check if any workout_sets reference this exercise
   const { count: setsCount, error: countError } = await supabase
@@ -209,10 +225,26 @@ export async function deleteCustomExerciseAction(exerciseId: string): Promise<Ac
   return { success: true };
 }
 
+export type RoutineWithVersions = {
+  id: string;
+  name: string;
+  description: string | null;
+  day_of_week: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday" | null;
+  created_at: string;
+  routine_versions: Array<{
+    id: string;
+    version_number: number;
+    structure_json: unknown;
+    created_at: string;
+  }>;
+};
+
 /**
  * Fetch all routines with their latest version for a given workspace
  */
-export async function getRoutinesAction(workspaceId: string) {
+export async function getRoutinesAction(
+  workspaceId: string
+): Promise<ActionResult<RoutineWithVersions[]>> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("routines")
@@ -220,6 +252,7 @@ export async function getRoutinesAction(workspaceId: string) {
       id,
       name,
       description,
+      day_of_week,
       created_at,
       routine_versions (
         id,
@@ -235,18 +268,13 @@ export async function getRoutinesAction(workspaceId: string) {
     return { error: error.message, data: [] };
   }
 
-  return { data, error: undefined };
+  return { data: (data || []) as unknown as RoutineWithVersions[], error: undefined };
 }
 
 /**
- * Create a new routine and version 1 in a single transaction-like flow
+ * Create a new routine and initial version 1
  */
-export async function createRoutineAction(input: {
-  name: string;
-  description?: string;
-  workspace_id: string;
-  exercises: PlannedExerciseItem[];
-}): Promise<ActionResult> {
+export async function createRoutineAction(input: CreateRoutineInput): Promise<ActionResult> {
   const validated = createRoutineSchema.safeParse(input);
   if (!validated.success) {
     return { error: validated.error.issues[0]?.message ?? "Invalid routine data" };
@@ -267,6 +295,7 @@ export async function createRoutineAction(input: {
     .insert({
       name: validated.data.name,
       description: validated.data.description || null,
+      day_of_week: validated.data.day_of_week || null,
       workspace_id: validated.data.workspace_id,
       created_by: user.id,
     })
@@ -289,5 +318,92 @@ export async function createRoutineAction(input: {
   }
 
   revalidatePath("/routines");
+  revalidatePath("/");
   return { success: true, data: routine };
+}
+
+/**
+ * Update an existing routine and create an immutable next version snapshot
+ */
+export async function updateRoutineAction(input: UpdateRoutineInput): Promise<ActionResult> {
+  const validated = updateRoutineSchema.safeParse(input);
+  if (!validated.success) {
+    return { error: validated.error.issues[0]?.message ?? "Invalid routine data" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "You must be signed in to update routines" };
+  }
+
+  // 1. Update routine metadata
+  const { data: routine, error: routineError } = await supabase
+    .from("routines")
+    .update({
+      name: validated.data.name,
+      description: validated.data.description || null,
+      day_of_week: validated.data.day_of_week || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", validated.data.id)
+    .select()
+    .single();
+
+  if (routineError) {
+    return { error: routineError.message };
+  }
+
+  // 2. Fetch latest version number to increment
+  const { data: latestVersion } = await supabase
+    .from("routine_versions")
+    .select("version_number")
+    .eq("routine_id", validated.data.id)
+    .order("version_number", { ascending: false })
+    .limit(1)
+    .single();
+
+  const nextVersionNumber = (latestVersion?.version_number || 1) + 1;
+
+  // 3. Create next version snapshot (preserving routine versioning for historical sessions)
+  const { error: versionError } = await supabase.from("routine_versions").insert({
+    routine_id: validated.data.id,
+    version_number: nextVersionNumber,
+    structure_json: validated.data.exercises as unknown as import("@/types/database.types").Json,
+  });
+
+  if (versionError) {
+    return { error: versionError.message };
+  }
+
+  revalidatePath("/routines");
+  revalidatePath("/");
+  return { success: true, data: routine };
+}
+
+/**
+ * Delete a routine (safely removes routine and cascades versions; preserves completed sessions)
+ */
+export async function deleteRoutineAction(routineId: string): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Must be signed in to delete routines" };
+  }
+
+  const { error } = await supabase.from("routines").delete().eq("id", routineId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/routines");
+  revalidatePath("/");
+  return { success: true };
 }

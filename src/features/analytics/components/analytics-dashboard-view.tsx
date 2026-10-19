@@ -14,11 +14,16 @@ import {
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
+import { AnalyticsCharts } from "@/features/analytics/components/analytics-charts";
+import { BodyMetricsCard } from "@/features/analytics/components/body-metrics-card";
+import { type BodyMetricEntry } from "@/features/analytics/body-metrics-actions";
 
 export function AnalyticsDashboardView({
   sessions,
+  bodyMetrics = [],
 }: {
   sessions: SessionSummary[];
+  bodyMetrics?: BodyMetricEntry[];
 }) {
   const [expandedSessionId, setExpandedSessionId] = React.useState<string | null>(
     sessions[0]?.id || null
@@ -40,7 +45,7 @@ export function AnalyticsDashboardView({
             weight_kg: ex.top_weight_kg,
             reps: ex.top_reps,
             session_name: s.name,
-            date: new Date(s.started_at).toLocaleDateString(undefined, {
+            date: new Date(s.started_at).toLocaleDateString("en-US", {
               month: "short",
               day: "numeric",
             }),
@@ -89,7 +94,7 @@ export function AnalyticsDashboardView({
             <Flame className="h-4 w-4 text-emerald-400" />
             <span>Workouts</span>
           </div>
-          <p className="text-2xl font-bold font-mono text-zinc-100">{totalCompletedWorkouts}</p>
+          <p className="font-display text-3xl font-extrabold leading-none sm:text-4xl text-zinc-100">{totalCompletedWorkouts}</p>
           <p className="text-[10px] text-zinc-500">Logged to date</p>
         </Card>
 
@@ -98,7 +103,7 @@ export function AnalyticsDashboardView({
             <BarChart2 className="h-4 w-4 text-emerald-400" />
             <span>Total Volume</span>
           </div>
-          <p className="text-2xl font-bold font-mono text-emerald-400">
+          <p className="font-display text-3xl font-extrabold leading-none sm:text-4xl text-emerald-400">
             {(lifetimeVolumeKg / 1000).toFixed(1)}k <span className="text-xs font-normal text-zinc-400">kg</span>
           </p>
           <p className="text-[10px] text-zinc-500">Lifted in total</p>
@@ -109,10 +114,13 @@ export function AnalyticsDashboardView({
             <Trophy className="h-4 w-4 text-emerald-400" />
             <span>Total Sets</span>
           </div>
-          <p className="text-2xl font-bold font-mono text-zinc-100">{totalCompletedSets}</p>
+          <p className="font-display text-3xl font-extrabold leading-none sm:text-4xl text-zinc-100">{totalCompletedSets}</p>
           <p className="text-[10px] text-zinc-500">Finished sets</p>
         </Card>
       </div>
+
+      {/* Visual Analytics Charts (Recharts) */}
+      <AnalyticsCharts sessions={sessions} />
 
       {/* Top Personal Records Carousel / Grid */}
       {personalRecords.length > 0 && (
@@ -131,7 +139,7 @@ export function AnalyticsDashboardView({
               >
                 <p className="font-semibold text-xs text-zinc-200 truncate">{name}</p>
                 <div className="flex items-baseline gap-1">
-                  <span className="font-mono text-base font-bold text-emerald-400">
+                  <span className="font-display text-xl text-base font-bold text-emerald-400">
                     {record.weight_kg}
                   </span>
                   <span className="text-[10px] text-zinc-500 font-mono">kg × {record.reps}</span>
@@ -142,6 +150,9 @@ export function AnalyticsDashboardView({
           </div>
         </section>
       )}
+
+      {/* Personal Body Composition Metrics */}
+      <BodyMetricsCard initialMetrics={bodyMetrics} />
 
       {/* Workout History Log */}
       <section className="space-y-3">
@@ -159,7 +170,7 @@ export function AnalyticsDashboardView({
               Finish a workout session from the home screen to build your performance history and progress charts.
             </p>
             <Link href="/">
-              <Button className="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold text-xs">
+              <Button className="bg-emerald-500 hover:bg-emerald-600 text-accent-ink font-semibold text-xs">
                 Start a Workout
               </Button>
             </Link>
@@ -169,12 +180,12 @@ export function AnalyticsDashboardView({
             {sessions.map((session) => {
               const isExpanded = expandedSessionId === session.id;
               const startDate = new Date(session.started_at);
-              const dateFormatted = startDate.toLocaleDateString(undefined, {
+              const dateFormatted = startDate.toLocaleDateString("en-US", {
                 weekday: "short",
                 month: "short",
                 day: "numeric",
               });
-              const timeFormatted = startDate.toLocaleTimeString(undefined, {
+              const timeFormatted = startDate.toLocaleTimeString("en-US", {
                 hour: "2-digit",
                 minute: "2-digit",
               });
@@ -208,7 +219,7 @@ export function AnalyticsDashboardView({
 
                       <div className="flex items-center gap-4 text-right">
                         <div>
-                          <p className="font-mono text-sm font-bold text-emerald-400">
+                          <p className="font-display text-xl text-sm font-bold text-emerald-400">
                             {session.total_volume_kg.toLocaleString()} kg
                           </p>
                           <p className="text-[10px] text-zinc-500">

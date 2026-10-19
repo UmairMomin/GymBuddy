@@ -27,7 +27,10 @@ export function AuthForm() {
       setError(res.error);
       setLoading(false);
     } else {
-      router.push("/");
+      // Return to the page the user originally asked for (set by the proxy), if it is a local path.
+      const next = new URLSearchParams(window.location.search).get("next");
+      const destination = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+      router.replace(destination);
       router.refresh();
     }
   }
@@ -43,16 +46,35 @@ export function AuthForm() {
         </CardTitle>
         <CardDescription className="text-zinc-400 text-xs">
           {isSignUp
-            ? "Enter a username and password to start tracking"
+            ? "Tell us your name and pick a username and password"
             : "Enter your username and password to continue"}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate={false}>
           {error && (
             <div className="flex items-center gap-2 rounded-lg bg-red-500/10 p-3 text-xs text-red-400 border border-red-500/20">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {isSignUp && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-zinc-300" htmlFor="name">
+                Name
+              </label>
+              <Input
+                id="name"
+                name="name"
+                type="text"
+                placeholder="e.g. Alex Carter"
+                required
+                minLength={2}
+                maxLength={60}
+                disabled={loading}
+                autoComplete="name"
+              />
             </div>
           )}
 
@@ -69,6 +91,7 @@ export function AuthForm() {
               disabled={loading}
               autoCapitalize="none"
               autoCorrect="off"
+              autoComplete="username"
             />
           </div>
 
@@ -82,6 +105,7 @@ export function AuthForm() {
               type="password"
               placeholder="••••••••"
               required
+              autoComplete={isSignUp ? "new-password" : "current-password"}
               disabled={loading}
             />
           </div>
@@ -100,14 +124,14 @@ export function AuthForm() {
             )}
           </Button>
 
-          <div className="text-center pt-2">
+          <div className="pt-1 text-center">
             <button
               type="button"
               onClick={() => {
                 setIsSignUp(!isSignUp);
                 setError(null);
               }}
-              className="text-xs text-zinc-400 hover:text-zinc-200 underline"
+              className="min-h-[44px] px-3 text-sm font-medium text-zinc-300 underline underline-offset-4 hover:text-zinc-50"
             >
               {isSignUp
                 ? "Already have an account? Sign In"

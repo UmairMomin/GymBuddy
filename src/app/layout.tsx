@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { MobileNavigation } from "@/components/layout/mobile-navigation";
 import { DesktopNavigation } from "@/components/layout/desktop-navigation";
-import { AuthHeaderButton } from "@/components/layout/auth-header-button";
+import { UserMenu } from "@/components/layout/user-menu";
 import { NetworkStatusIndicator } from "@/components/layout/network-status-indicator";
 import { ThemeScript, ThemeSync } from "@/components/layout/theme-script";
 import "./globals.css";
@@ -72,8 +72,8 @@ export default function RootLayout({
                 </Suspense>
               </div>
               <div className="flex items-center gap-3 text-xs">
-                <Suspense fallback={<div className="h-9 w-16 animate-pulse rounded-md bg-zinc-800" />}>
-                  <AuthHeaderButton />
+                <Suspense fallback={<div className="h-11 w-11 animate-pulse rounded-full bg-zinc-800" />}>
+                  <UserMenu />
                 </Suspense>
               </div>
             </header>

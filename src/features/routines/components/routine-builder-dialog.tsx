@@ -23,6 +23,7 @@ export function RoutineBuilderDialog({
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
+  const [dayOfWeek, setDayOfWeek] = React.useState<string>("monday");
   const [selectedExercises, setSelectedExercises] = React.useState<PlannedExerciseItem[]>([]);
   const [selectedExerciseId, setSelectedExerciseId] = React.useState(
     availableExercises[0]?.id || ""
@@ -75,6 +76,7 @@ export function RoutineBuilderDialog({
     const res = await createRoutineAction({
       name,
       description: description || undefined,
+      day_of_week: dayOfWeek ? (dayOfWeek as "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday") : undefined,
       workspace_id: workspaceId,
       exercises: selectedExercises,
     });
@@ -90,6 +92,7 @@ export function RoutineBuilderDialog({
         setOpen(false);
         setName("");
         setDescription("");
+        setDayOfWeek("monday");
         setSelectedExercises([]);
         onCreated?.();
       }, 1000);
@@ -100,7 +103,7 @@ export function RoutineBuilderDialog({
     return (
       <Button
         onClick={() => setOpen(true)}
-        className="gap-2 bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold"
+        className="gap-2 bg-emerald-500 hover:bg-emerald-600 text-accent-ink font-semibold"
       >
         <Plus className="h-4 w-4" />
         Create Routine
@@ -136,15 +139,36 @@ export function RoutineBuilderDialog({
               </div>
             )}
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-zinc-300">Routine Name</label>
-              <Input
-                placeholder="e.g. Upper Body Push (Hypertrophy)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                disabled={loading}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-zinc-300">Routine Name</label>
+                <Input
+                  placeholder="e.g. Upper Body Push"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-zinc-300">Scheduled Day</label>
+                <select
+                  value={dayOfWeek}
+                  onChange={(e) => setDayOfWeek(e.target.value)}
+                  disabled={loading}
+                  className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Freestyle (No specific day)</option>
+                  <option value="monday">Monday</option>
+                  <option value="tuesday">Tuesday</option>
+                  <option value="wednesday">Wednesday</option>
+                  <option value="thursday">Thursday</option>
+                  <option value="friday">Friday</option>
+                  <option value="saturday">Saturday</option>
+                  <option value="sunday">Sunday</option>
+                </select>
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -256,7 +280,7 @@ export function RoutineBuilderDialog({
               </Button>
               <Button
                 type="submit"
-                className="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold"
+                className="bg-emerald-500 hover:bg-emerald-600 text-accent-ink font-semibold"
                 disabled={loading}
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Routine"}

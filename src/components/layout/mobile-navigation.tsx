@@ -8,6 +8,9 @@ import { NAV_ITEMS, isNavActive } from "@/components/layout/nav-items";
 export function MobileNavigation() {
   const pathname = usePathname();
 
+  // Signed-out users only see the sign-in page; nothing to navigate to yet.
+  if (pathname === "/login") return null;
+
   return (
     <nav
       aria-label="Bottom Navigation"

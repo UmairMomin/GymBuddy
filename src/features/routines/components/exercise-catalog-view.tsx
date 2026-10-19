@@ -18,7 +18,8 @@ const CATEGORIES = [
   "back",
   "legs",
   "shoulders",
-  "arms",
+  "bicep",
+  "tricep",
   "core",
   "cardio",
   "full_body",
@@ -102,7 +103,7 @@ export function ExerciseCatalogView({
               onClick={() => setSelectedCategory(cat)}
               className={`rounded-full px-3 py-1 font-medium capitalize transition-colors ${
                 selectedCategory === cat
-                  ? "bg-emerald-500 text-zinc-950"
+                  ? "bg-emerald-500 text-accent-ink"
                   : "bg-zinc-800/80 text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -122,7 +123,7 @@ export function ExerciseCatalogView({
               onClick={() => setSelectedEquipment(eq)}
               className={`rounded-full px-3 py-1 font-medium capitalize transition-colors ${
                 selectedEquipment === eq
-                  ? "bg-emerald-500 text-zinc-950"
+                  ? "bg-emerald-500 text-accent-ink"
                   : "bg-zinc-800/80 text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -169,13 +170,18 @@ export function ExerciseCatalogView({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs text-zinc-400">
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
                     <span className="capitalize text-zinc-300">{exercise.category}</span>
                     {exercise.primary_equipment && (
                       <>
                         <span>•</span>
                         <span className="capitalize">{exercise.primary_equipment}</span>
                       </>
+                    )}
+                    {exercise.handle_type && (
+                      <span className="ml-1 inline-flex items-center rounded-md bg-zinc-800/90 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300 border border-emerald-500/20 capitalize">
+                        {exercise.handle_type.replace(/_/g, " ")}
+                      </span>
                     )}
                   </div>
 

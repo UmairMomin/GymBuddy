@@ -14,10 +14,49 @@ export type Database = {
   }
   public: {
     Tables: {
+      body_metrics: {
+        Row: {
+          body_fat_percentage: number | null
+          created_at: string
+          id: string
+          notes: string | null
+          recorded_date: string
+          user_id: string
+          weight_kg: number
+        }
+        Insert: {
+          body_fat_percentage?: number | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          recorded_date?: string
+          user_id: string
+          weight_kg: number
+        }
+        Update: {
+          body_fat_percentage?: number | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          recorded_date?: string
+          user_id?: string
+          weight_kg?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "body_metrics_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exercises: {
         Row: {
           category: string
           created_at: string
+          handle_type: string | null
           id: string
           is_custom: boolean
           name: string
@@ -28,6 +67,7 @@ export type Database = {
         Insert: {
           category: string
           created_at?: string
+          handle_type?: string | null
           id?: string
           is_custom?: boolean
           name: string
@@ -38,6 +78,7 @@ export type Database = {
         Update: {
           category?: string
           created_at?: string
+          handle_type?: string | null
           id?: string
           is_custom?: boolean
           name?: string
@@ -62,6 +103,7 @@ export type Database = {
           display_name: string
           email: string
           id: string
+          preferred_unit: "kg" | "lb"
           updated_at: string
         }
         Insert: {
@@ -70,6 +112,7 @@ export type Database = {
           display_name: string
           email: string
           id: string
+          preferred_unit?: "kg" | "lb"
           updated_at?: string
         }
         Update: {
@@ -78,6 +121,7 @@ export type Database = {
           display_name?: string
           email?: string
           id?: string
+          preferred_unit?: "kg" | "lb"
           updated_at?: string
         }
         Relationships: []
@@ -118,6 +162,15 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          day_of_week:
+            | "monday"
+            | "tuesday"
+            | "wednesday"
+            | "thursday"
+            | "friday"
+            | "saturday"
+            | "sunday"
+            | null
           description: string | null
           id: string
           name: string
@@ -127,6 +180,15 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by: string
+          day_of_week?:
+            | "monday"
+            | "tuesday"
+            | "wednesday"
+            | "thursday"
+            | "friday"
+            | "saturday"
+            | "sunday"
+            | null
           description?: string | null
           id?: string
           name: string
@@ -136,6 +198,15 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string
+          day_of_week?:
+            | "monday"
+            | "tuesday"
+            | "wednesday"
+            | "thursday"
+            | "friday"
+            | "saturday"
+            | "sunday"
+            | null
           description?: string | null
           id?: string
           name?: string
@@ -159,22 +230,138 @@ export type Database = {
           },
         ]
       }
-      session_participants: {
+      scheduled_workouts: {
         Row: {
+          created_at: string
+          created_by: string
           id: string
-          joined_at: string
+          notes: string | null
+          routine_id: string | null
+          routine_version_id: string | null
+          scheduled_for: string
+          status: "scheduled" | "in_progress" | "completed" | "cancelled" | "missed"
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          notes?: string | null
+          routine_id?: string | null
+          routine_version_id?: string | null
+          scheduled_for: string
+          status?: "scheduled" | "in_progress" | "completed" | "cancelled" | "missed"
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          notes?: string | null
+          routine_id?: string | null
+          routine_version_id?: string | null
+          scheduled_for?: string
+          status?: "scheduled" | "in_progress" | "completed" | "cancelled" | "missed"
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_workouts_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_workouts_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "routines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_workouts_routine_version_id_fkey"
+            columns: ["routine_version_id"]
+            isOneToOne: false
+            referencedRelation: "routine_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_workouts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          payload_json: Json
           session_id: string
           user_id: string
         }
         Insert: {
+          created_at?: string
+          event_type: string
           id?: string
-          joined_at?: string
+          payload_json?: Json
           session_id: string
           user_id: string
         }
         Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload_json?: Json
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_participants: {
+        Row: {
+          completed_at: string | null
+          id: string
+          joined_at: string
+          notes: string | null
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
           id?: string
           joined_at?: string
+          notes?: string | null
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          id?: string
+          joined_at?: string
+          notes?: string | null
           session_id?: string
           user_id?: string
         }
@@ -391,6 +578,7 @@ export type Database = {
           created_by: string
           description: string | null
           id: string
+          invite_code: string | null
           name: string
           updated_at: string
         }
@@ -399,6 +587,7 @@ export type Database = {
           created_by: string
           description?: string | null
           id?: string
+          invite_code?: string | null
           name: string
           updated_at?: string
         }
@@ -407,6 +596,7 @@ export type Database = {
           created_by?: string
           description?: string | null
           id?: string
+          invite_code?: string | null
           name?: string
           updated_at?: string
         }
@@ -425,6 +615,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      join_workspace_by_invite_code: {
+        Args: { _invite_code: string }
+        Returns: Json
+      }
       is_workspace_member: {
         Args: { _user_id: string; _workspace_id: string }
         Returns: boolean

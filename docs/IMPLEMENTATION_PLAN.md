@@ -136,3 +136,154 @@ This implementation plan breaks down the development of the Gym Tracker applicat
   - [x] Authoritative scope alignment: Fully aligned with [docs/MASTER_SPEC.md](file:///Users/umairmomin/Desktop/gymbuddy/docs/MASTER_SPEC.md) (modular monolith, no native app, no public social bloat, secure multi-user in-gym workout tracking with responsive mobile & desktop ergonomics).
 - **Blockers**: None.
 - **Verification**: Complete database RLS query verified (`100% tables RLS enabled`), test assertion script exited with 0, and Next.js production build succeeded.
+
+---
+
+## Milestone 9: Group & Workspace Management (`/group`)
+- **Status**: COMPLETED
+- **Objective**: Implement group/workspace management, resolve `/group` route, partner invitations via invite codes, and membership rosters.
+- **Acceptance Criteria**:
+  - [x] Add `invite_code` support to `workspaces` table with lookup and `join_workspace_by_invite_code` RPC function.
+  - [x] Dedicated Group/Workspace Management page (`/group`).
+  - [x] Workspace member roster with roles (`owner`, `admin`, `member`) and avatars.
+  - [x] Generate invite link / copyable code dialog with clipboard copy.
+  - [x] Join existing workspace by code dialog.
+- **Verification**: Database migration applied to Supabase Cloud, `pnpm type-check` (exit code 0), `pnpm lint` (exit code 0), and production `pnpm build` (exit code 0 across 11 routes).
+
+---
+
+## Milestone 10: Multi-User Collaborative Sessions & Co-Trainee Ergonomics
+- **Status**: COMPLETED
+- **Objective**: Full multi-user in-gym session parity matching MASTER_SPEC §11 & §26.
+- **Acceptance Criteria**:
+  - [x] "Join Active Workout" flow for co-trainees in the workspace (`joinWorkoutSessionAction`).
+  - [x] Trainee attribution badges and filter tabs ("All Sets", "My Sets", "Partner's Sets").
+  - [x] Individual participant finish (`session_participants.completed_at`, `finishParticipantWorkoutAction`) vs session-wide completion.
+  - [x] Post-workout dual summary view (Personal Performance vs Group Combined Summary).
+- **Verification**: Database migration applied to Supabase Cloud, `pnpm type-check` (exit code 0), and clean component integration.
+
+---
+
+## Milestone 11: Interactive Visual Analytics (Recharts)
+- **Status**: COMPLETED
+- **Objective**: Rich interactive charts for volume trends, 1RM strength curves, and muscle balance.
+- **Acceptance Criteria**:
+  - [x] Install and configure `recharts`.
+  - [x] Weekly/monthly tonnage volume over time area chart (`AnalyticsCharts`).
+  - [x] Exercise-specific estimated 1RM / top-weight progression curve with interactive exercise selector.
+  - [x] Muscle group volume and set distribution breakdown.
+- **Verification**: `recharts` installed, `pnpm type-check` (exit code 0), clean Next.js client integration.
+
+---
+
+## Milestone 12: User Preferences & Unit System (kg / lb)
+- **Status**: COMPLETED
+- **Objective**: User unit preference toggle with canonical database storage in kg.
+- **Acceptance Criteria**:
+  - [x] Add `preferred_unit` to `profiles` schema with database migration.
+  - [x] Bidirectional kg/lb conversion utilities with gym plate increment precision (`src/lib/units.ts`).
+  - [x] Dedicated `/settings` page with real-time Unit Toggle (kg vs lb).
+  - [x] User profile settings actions (`getUserProfileSettingsAction`, `updatePreferredUnitAction`).
+- **Verification**: Database migration applied to Supabase Cloud, `pnpm type-check` (exit code 0), and clean Next.js route integration.
+
+---
+
+## Milestone 13: Workout Scheduling & Calendar
+- **Status**: COMPLETED
+- **Objective**: Planned workout scheduling, calendar view, and one-click session launching.
+- **Acceptance Criteria**:
+  - [x] `scheduled_workouts` schema migration with full RLS policies applied to Supabase Cloud.
+  - [x] Schedule workout modal linking target dates with routines (`UpcomingWorkoutsCard`).
+  - [x] Dashboard upcoming schedule widget with routine and time badges.
+  - [x] 1-click launch active workout directly from scheduled routine (`startScheduledWorkoutAction`).
+- **Verification**: Database migration applied to Supabase Cloud, `pnpm type-check` (exit code 0), clean integration on home dashboard.
+
+---
+
+## Milestone 14: Extended Tables (Body Metrics & Session Events)
+- **Status**: COMPLETED
+- **Objective**: Body composition tracking and collaborative live audit events.
+- **Acceptance Criteria**:
+  - [x] `body_metrics` table with strict private user RLS policies applied to Supabase Cloud.
+  - [x] `session_events` audit table with Realtime publication for tracking partner set logs, updates, and deletions.
+  - [x] Personal body weight and body fat % tracking with Recharts trend line in `/analytics` (`BodyMetricsCard`).
+  - [x] Real-time audit events recorded automatically on set mutations in `src/features/sessions/actions.ts`.
+- **Verification**: Database migration applied to Supabase Cloud, `pnpm type-check` (exit code 0), `pnpm lint` (exit code 0), and production `pnpm build` (exit code 0 across all 12 routes with Partial Prerendering).
+
+
+---
+
+# V2 Restructure (solo tracker + optional buddy)
+
+Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14 above describe the V1 build (workspace-based) and are historical; V2 replaces the group model. All V2 milestones start `NOT STARTED`; mark complete only with verification evidence (`pnpm type-check`, `pnpm lint`, tests, build).
+
+## Milestone 15: Clean Schema Reset
+- **Status**: NOT STARTED
+- **Objective**: Drop the V1 schema and recreate a solo + buddy data model with RLS.
+- **Acceptance Criteria**:
+  - [ ] Confirm with the owner that no V1 data needs exporting, then drop all public tables.
+  - [ ] New migrations: `profiles`, `buddy_links`, `exercises` (+ seed), `routines`, `routine_versions`, `weekly_schedule`, `workout_sessions`, `session_participants`, `set_records`, `body_metrics`, `push_subscriptions`.
+  - [ ] RLS on every table; policy tests prove: buddy sees only shared sessions, never solo sessions/metrics; non-participants see nothing.
+  - [ ] Transactional DB functions for multi-table writes (start session, join, accept buddy link, save routine version).
+  - [ ] Regenerated `database.types.ts` matches migrations.
+
+## Milestone 16: Buddy Link
+- **Status**: NOT STARTED
+- **Objective**: Replace groups with a 1:1 buddy connection.
+- **Acceptance Criteria**:
+  - [ ] Request a buddy by username; accept/decline/remove; max one accepted buddy.
+  - [ ] **Buddy** tab shows link state and shared-session list.
+  - [ ] `/group`, group actions/components and workspace code removed.
+
+## Milestone 17: Plan (Schedule, Routines, Exercises)
+- **Status**: NOT STARTED
+- **Objective**: One **Plan** tab to build exercises, routines and the weekly split.
+- **Acceptance Criteria**:
+  - [ ] Segmented Schedule | Routines | Exercises; `/exercises` folded into Plan.
+  - [ ] Routine builder: name, days it runs on, exercises with target sets, add from catalog or create inline, reorder/remove.
+  - [ ] Weekly schedule editable; changing it creates no history changes (routine versioning preserved).
+  - [ ] Seed template for Push / Pull / Legs / Push / Pull / Shoulders+Arms (editable).
+
+## Milestone 18: Today + Solo Workout Engine
+- **Status**: NOT STARTED
+- **Objective**: Home screen and the fast logging flow, solo first.
+- **Acceptance Criteria**:
+  - [ ] Today screen: scheduled routine, exercise preview, Start/Resume, week strip, recent sessions.
+  - [ ] Active workout per design: last-time values as **placeholders**, one-tap confirm, auto rest timer, add/skip exercise mid-workout, finish.
+  - [ ] Idempotent writes with stable set IDs and `revision_number`.
+  - [ ] Bottom nav is the four V2 tabs.
+
+## Milestone 19: Live Buddy Sessions
+- **Status**: NOT STARTED
+- **Objective**: Invite a buddy into a workout and log together in real time.
+- **Acceptance Criteria**:
+  - [ ] "Train with buddy" toggle creates an `invited` participant; buddy sees banner + Join button via Realtime; Join/Decline confirmation always required.
+  - [ ] Share-link fallback via the iOS share sheet.
+  - [ ] Private per-session Realtime channel authorized by RLS; presence ("Buddy is here · live" + current set).
+  - [ ] Two-lane logging UI; either user can edit the other's sets (including after finish) with `last_edited_by` shown; conflicts handled via revisions.
+  - [ ] Shared rest timer (start timestamp); reconnect refetches authoritative state and merges queued writes.
+  - [ ] Late join / early leave supported.
+
+## Milestone 20: History
+- **Status**: NOT STARTED
+- **Objective**: Merge analytics into **History** and keep body metrics and exports.
+- **Acceptance Criteria**:
+  - [ ] Past sessions list (solo and shared), PRs, volume/1RM charts, body metrics, CSV/JSON export.
+  - [ ] Totals and PRs recompute after post-finish edits.
+  - [ ] `/analytics` route retired or redirected.
+
+## Milestone 21: PWA Polish & Web Push
+- **Status**: NOT STARTED
+- **Objective**: Make the installable iPhone PWA excellent and add background invites.
+- **Acceptance Criteria**:
+  - [ ] Home-screen install prompt/guide, safe-area review, offline-tolerant logging queue.
+  - [ ] Web Push (VAPID, `web-push`, `push_subscriptions`) for buddy invites; opt-in flow; graceful fallback when unavailable.
+
+## Milestone 22: Verification & Consistency Pass
+- **Status**: NOT STARTED
+- **Objective**: Prove the restructure and remove inconsistencies.
+- **Acceptance Criteria**:
+  - [ ] Full RLS audit and policy tests pass.
+  - [ ] Playwright e2e: solo workout, two-user shared workout, edit-after-finish, offline/reconnect.
+  - [ ] No remaining references to workspaces/groups; UI components, spacing and dialogs consistent with the Iron Black theme.
+  - [ ] `pnpm type-check`, `pnpm lint`, tests, and `pnpm build` all pass with recorded output.

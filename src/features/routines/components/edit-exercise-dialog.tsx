@@ -5,32 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { updateCustomExerciseAction } from "@/features/routines/actions";
-import { Edit2, Loader2, Check, AlertCircle } from "lucide-react";
+import { Edit2, Check, AlertCircle } from "lucide-react";
 import type { Database } from "@/types/database.types";
+import {
+  CATEGORIES,
+  EQUIPMENTS,
+  CABLE_HANDLES,
+  BARBELL_HANDLES,
+} from "@/features/routines/components/create-exercise-dialog";
 
 type ExerciseRow = Database["public"]["Tables"]["exercises"]["Row"];
-
-const CATEGORIES = [
-  "chest",
-  "back",
-  "legs",
-  "shoulders",
-  "arms",
-  "core",
-  "cardio",
-  "full_body",
-  "other",
-] as const;
-
-const EQUIPMENTS = [
-  "barbell",
-  "dumbbell",
-  "cable",
-  "machine",
-  "bodyweight",
-  "kettlebell",
-  "other",
-] as const;
 
 export function EditExerciseDialog({
   exercise,
@@ -41,6 +25,12 @@ export function EditExerciseDialog({
 }) {
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
+  const [equipment, setEquipment] = React.useState<string>(
+    exercise.primary_equipment || "barbell"
+  );
+  const [handleType, setHandleType] = React.useState<string>(
+    exercise.handle_type || ""
+  );
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState(false);
 
@@ -73,7 +63,7 @@ export function EditExerciseDialog({
         variant="ghost"
         size="icon"
         onClick={() => setOpen(true)}
-        className="h-8 w-8 text-zinc-400 hover:text-white"
+        className="h-8 w-8 text-zinc-400 hover:text-zinc-50"
         aria-label="Edit exercise"
       >
         <Edit2 className="h-3.5 w-3.5" />
@@ -106,7 +96,7 @@ export function EditExerciseDialog({
             )}
 
             <div className="space-y-1">
-              <label className="text-xs font-medium text-zinc-300">Name</label>
+              <label className="text-xs font-medium text-zinc-300">Name *</label>
               <Input
                 name="name"
                 defaultValue={exercise.name}
@@ -117,17 +107,17 @@ export function EditExerciseDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-zinc-300">Category</label>
+                <label className="text-xs font-medium text-zinc-300">Category *</label>
                 <select
                   name="category"
                   defaultValue={exercise.category}
                   required
                   disabled={loading}
-                  className="flex h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="flex h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 capitalize"
                 >
                   {CATEGORIES.map((cat) => (
                     <option key={cat} value={cat}>
-                      {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                      {cat}
                     </option>
                   ))}
                 </select>
@@ -137,19 +127,61 @@ export function EditExerciseDialog({
                 <label className="text-xs font-medium text-zinc-300">Equipment</label>
                 <select
                   name="primary_equipment"
-                  defaultValue={exercise.primary_equipment || ""}
+                  value={equipment}
+                  onChange={(e) => setEquipment(e.target.value)}
                   disabled={loading}
-                  className="flex h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="flex h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 capitalize"
                 >
                   <option value="">None / Other</option>
                   {EQUIPMENTS.map((eq) => (
                     <option key={eq} value={eq}>
-                      {eq.charAt(0).toUpperCase() + eq.slice(1)}
+                      {eq}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
+
+            {/* Handle / Attachment Type Selection */}
+            {equipment === "cable" && (
+              <div className="space-y-1 bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-800">
+                <label className="text-xs font-medium text-emerald-400">Cable Attachment / Handle</label>
+                <select
+                  name="handle_type"
+                  value={handleType}
+                  onChange={(e) => setHandleType(e.target.value)}
+                  disabled={loading}
+                  className="flex h-10 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">None / Standard</option>
+                  {CABLE_HANDLES.map((h) => (
+                    <option key={h.value} value={h.value}>
+                      {h.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {equipment === "barbell" && (
+              <div className="space-y-1 bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-800">
+                <label className="text-xs font-medium text-emerald-400">Barbell Type / Grip</label>
+                <select
+                  name="handle_type"
+                  value={handleType}
+                  onChange={(e) => setHandleType(e.target.value)}
+                  disabled={loading}
+                  className="flex h-10 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">None / Standard</option>
+                  {BARBELL_HANDLES.map((h) => (
+                    <option key={h.value} value={h.value}>
+                      {h.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="space-y-1">
               <label className="text-xs font-medium text-zinc-300">Notes / Form Cues</label>
@@ -164,18 +196,21 @@ export function EditExerciseDialog({
             <div className="flex items-center justify-end gap-2 pt-2">
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
+                size="sm"
                 onClick={() => setOpen(false)}
                 disabled={loading}
+                className="border-zinc-800 text-xs"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                className="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-medium"
+                size="sm"
                 disabled={loading}
+                className="bg-emerald-500 hover:bg-emerald-600 text-accent-ink font-semibold text-xs"
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Changes"}
+                Save Changes
               </Button>
             </div>
           </form>

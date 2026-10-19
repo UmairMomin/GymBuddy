@@ -10,6 +10,11 @@ export const signInSchema = z.object({
 });
 
 export const signUpSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, "Name must be at least 2 characters")
+    .max(60, "Name cannot exceed 60 characters"),
   username: z
     .string()
     .min(3, "Username must be at least 3 characters")

@@ -3,8 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getExercisesAction, getOrCreateDefaultWorkspaceAction, getRoutinesAction } from "@/features/routines/actions";
 import { RoutineBuilderDialog } from "@/features/routines/components/routine-builder-dialog";
 import { CreateExerciseDialog } from "@/features/routines/components/create-exercise-dialog";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, Play, Lock } from "lucide-react";
+import { RoutinesList } from "@/features/routines/components/routines-list";
+import { Lock } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -24,7 +24,7 @@ export async function RoutinesContent() {
           Please sign in to view and create workout routines for your training group.
         </p>
         <Link href="/login">
-          <Button className="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold">
+          <Button className="bg-emerald-500 hover:bg-emerald-600 text-accent-ink font-semibold">
             Sign In to Continue
           </Button>
         </Link>
@@ -73,92 +73,12 @@ export async function RoutinesContent() {
         </div>
       </div>
 
-      {/* Routine Cards Grid */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            Available Routines ({routines.length})
-          </h2>
-        </div>
-
-        {routines.length === 0 ? (
-          <Card className="border-dashed border-zinc-800 bg-transparent text-center p-8">
-            <Calendar className="h-10 w-10 text-zinc-600 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-zinc-300">No routines created yet</p>
-            <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto mb-4">
-              Build your first split (Push, Pull, Legs, etc.) to quickly launch synchronized sessions with your gym partners.
-            </p>
-            <RoutineBuilderDialog
-              workspaceId={workspace.id}
-              availableExercises={exercises}
-            />
-          </Card>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {routines.map((routine) => {
-              const latestVersion = routine.routine_versions?.[0];
-              const plannedExercises = (latestVersion?.structure_json as Array<{
-                exercise_name: string;
-                target_sets: number;
-                target_reps: string;
-              }>) || [];
-
-              return (
-                <Card
-                  key={routine.id}
-                  className="border-zinc-800 bg-zinc-900/60 shadow-md flex flex-col justify-between"
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-base font-semibold">
-                        {routine.name}
-                      </CardTitle>
-                      <span className="rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-400">
-                        v{latestVersion?.version_number ?? 1}
-                      </span>
-                    </div>
-                    {routine.description && (
-                      <CardDescription className="text-xs text-zinc-400 line-clamp-2">
-                        {routine.description}
-                      </CardDescription>
-                    )}
-                  </CardHeader>
-
-                  <CardContent className="space-y-3 pt-0">
-                    <div className="space-y-1.5 rounded-lg bg-zinc-950/60 p-2.5 text-xs">
-                      <p className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
-                        Planned Movements ({plannedExercises.length})
-                      </p>
-                      <ul className="space-y-1 text-zinc-300">
-                        {plannedExercises.slice(0, 4).map((ex, i) => (
-                          <li key={i} className="flex justify-between items-center text-xs">
-                            <span className="truncate">{ex.exercise_name}</span>
-                            <span className="text-zinc-500 font-mono text-[11px]">
-                              {ex.target_sets} × {ex.target_reps}
-                            </span>
-                          </li>
-                        ))}
-                        {plannedExercises.length > 4 && (
-                          <li className="text-[11px] text-zinc-500 italic">
-                            +{plannedExercises.length - 4} more movements
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-
-                    <Link href={`/?routineId=${routine.id}`} className="block">
-                      <Button className="w-full gap-2 bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold h-10">
-                        <Play className="h-4 w-4 fill-zinc-950" />
-                        Start Session
-                      </Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* Routine Cards Grid with Day Filtering and CRUD Actions */}
+      <RoutinesList
+        routines={routines}
+        availableExercises={exercises}
+        workspaceId={workspace.id}
+      />
 
       {/* Exercise Catalog Overview */}
       <section className="space-y-3 pt-4 border-t border-zinc-800">

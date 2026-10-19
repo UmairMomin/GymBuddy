@@ -5,21 +5,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createCustomExerciseAction } from "@/features/routines/actions";
-import { Plus, Loader2, Check, AlertCircle } from "lucide-react";
+import { Plus, Check, AlertCircle } from "lucide-react";
 
-const CATEGORIES = [
+export const CATEGORIES = [
   "chest",
   "back",
   "legs",
   "shoulders",
-  "arms",
+  "bicep",
+  "tricep",
   "core",
   "cardio",
   "full_body",
   "other",
 ] as const;
 
-const EQUIPMENTS = [
+export const EQUIPMENTS = [
   "barbell",
   "dumbbell",
   "cable",
@@ -27,6 +28,20 @@ const EQUIPMENTS = [
   "bodyweight",
   "kettlebell",
   "other",
+] as const;
+
+export const CABLE_HANDLES = [
+  { value: "straight_bar", label: "Straight Bar" },
+  { value: "ez_bar", label: "EZ Bar" },
+  { value: "d_handle", label: "D-Handle" },
+  { value: "rope", label: "Rope" },
+  { value: "tricep_bar", label: "Tricep Bar" },
+] as const;
+
+export const BARBELL_HANDLES = [
+  { value: "straight_bar", label: "Straight Bar" },
+  { value: "ez_bar", label: "EZ Bar" },
+  { value: "hammer_bar", label: "Hammer Bar" },
 ] as const;
 
 export function CreateExerciseDialog({
@@ -38,6 +53,7 @@ export function CreateExerciseDialog({
 }) {
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
+  const [equipment, setEquipment] = React.useState<string>("barbell");
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState(false);
 
@@ -103,10 +119,10 @@ export function CreateExerciseDialog({
             )}
 
             <div className="space-y-1">
-              <label className="text-xs font-medium text-zinc-300">Name</label>
+              <label className="text-xs font-medium text-zinc-300">Name *</label>
               <Input
                 name="name"
-                placeholder="e.g. Bulgarian Split Squat"
+                placeholder="e.g. Incline Cable Bicep Curl"
                 required
                 disabled={loading}
               />
@@ -114,16 +130,16 @@ export function CreateExerciseDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-zinc-300">Category</label>
+                <label className="text-xs font-medium text-zinc-300">Category *</label>
                 <select
                   name="category"
                   required
                   disabled={loading}
-                  className="flex h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="flex h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 capitalize"
                 >
                   {CATEGORIES.map((cat) => (
                     <option key={cat} value={cat}>
-                      {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                      {cat}
                     </option>
                   ))}
                 </select>
@@ -133,24 +149,63 @@ export function CreateExerciseDialog({
                 <label className="text-xs font-medium text-zinc-300">Equipment</label>
                 <select
                   name="primary_equipment"
+                  value={equipment}
+                  onChange={(e) => setEquipment(e.target.value)}
                   disabled={loading}
-                  className="flex h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="flex h-11 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 capitalize"
                 >
                   <option value="">None / Other</option>
                   {EQUIPMENTS.map((eq) => (
                     <option key={eq} value={eq}>
-                      {eq.charAt(0).toUpperCase() + eq.slice(1)}
+                      {eq}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
 
+            {/* Handle / Attachment Type Selection based on equipment */}
+            {equipment === "cable" && (
+              <div className="space-y-1 bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-800">
+                <label className="text-xs font-medium text-emerald-400">Cable Attachment / Handle</label>
+                <select
+                  name="handle_type"
+                  disabled={loading}
+                  className="flex h-10 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">None / Standard</option>
+                  {CABLE_HANDLES.map((h) => (
+                    <option key={h.value} value={h.value}>
+                      {h.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {equipment === "barbell" && (
+              <div className="space-y-1 bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-800">
+                <label className="text-xs font-medium text-emerald-400">Barbell Type / Grip</label>
+                <select
+                  name="handle_type"
+                  disabled={loading}
+                  className="flex h-10 w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">None / Standard</option>
+                  {BARBELL_HANDLES.map((h) => (
+                    <option key={h.value} value={h.value}>
+                      {h.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="space-y-1">
               <label className="text-xs font-medium text-zinc-300">Notes / Cue (Optional)</label>
               <Input
                 name="notes"
-                placeholder="e.g. Elevate back foot on 6-inch block"
+                placeholder="e.g. Keep elbows tucked, pause at top"
                 disabled={loading}
               />
             </div>
@@ -158,18 +213,21 @@ export function CreateExerciseDialog({
             <div className="flex items-center justify-end gap-2 pt-2">
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
+                size="sm"
                 onClick={() => setOpen(false)}
                 disabled={loading}
+                className="border-zinc-800 text-xs"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                className="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-medium"
+                size="sm"
                 disabled={loading}
+                className="bg-emerald-500 hover:bg-emerald-600 text-accent-ink font-semibold text-xs"
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Exercise"}
+                Save Movement
               </Button>
             </div>
           </form>

@@ -1,5 +1,7 @@
 # GYM TRACKER — MASTER IMPLEMENTATION SPECIFICATION
 
+> **V2 NOTICE (2026-10-19):** Product direction changed. Groups/workspaces are removed in favour of a solo tracker with one optional buddy. Read [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md) first; it overrides this document wherever they conflict (product definition, navigation, workspace/group data model and RLS, home screen).
+
 **Project:** Collaborative Gym Tracker  
 **Version:** V1.0 — Scope Locked  
 **Platform:** Responsive, mobile-first web application / PWA  

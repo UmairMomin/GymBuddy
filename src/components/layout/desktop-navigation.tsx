@@ -3,14 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { DESKTOP_NAV_ITEMS, isNavActive } from "@/components/layout/nav-items";
+import { NAV_ITEMS, isNavActive } from "@/components/layout/nav-items";
 
 export function DesktopNavigation() {
   const pathname = usePathname();
 
+  // Signed-out users only see the sign-in page; nothing to navigate to yet.
+  if (pathname === "/login") return null;
+
   return (
     <nav aria-label="Primary" className="hidden items-center gap-1 text-sm font-semibold md:flex">
-      {DESKTOP_NAV_ITEMS.map((item) => {
+      {NAV_ITEMS.map((item) => {
         const isActive = isNavActive(pathname, item);
         return (
           <Link
