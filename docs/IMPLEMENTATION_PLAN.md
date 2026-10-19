@@ -296,11 +296,18 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
 - **Verification**: `pnpm test` 24 passing (Brzycki + volume, aggregate/PR rules incl. edit-after-finish, CSV escaping, sync rules); ESLint clean; type-check clean for source (the only reported errors are stale generated `.next/types` for the deleted `/group` route); **`next build` of a clean copy succeeded**: Turbopack compile, TypeScript pass and all 13 routes generated. UI checked at 375px with mock data in lb (removed).
 
 ## Milestone 21: PWA Polish & Web Push
-- **Status**: NOT STARTED
+- **Status**: CODE COMPLETE; push delivery and the reload-replay path are not verified on a real device.
 - **Objective**: Make the installable iPhone PWA excellent and add background invites.
 - **Acceptance Criteria**:
-  - [ ] Home-screen install prompt/guide, safe-area review, offline-tolerant logging queue.
-  - [ ] Web Push (VAPID, `web-push`, `push_subscriptions`) for buddy invites; opt-in flow; graceful fallback when unavailable.
+  - [x] Install: PNG icons (192 / 512 / maskable / 180 apple-touch) in the Iron Black palette, full manifest (`id`, `scope`, theme colors, categories), `apple-touch-icon` metadata, and an `InstallPrompt` on Today (iOS: Share → Add to Home Screen steps; Chromium: native install button; dismissible; hidden once installed).
+  - [x] Safe areas were already handled (`pt-safe` / `pb-safe`, `viewportFit: cover`, nav and rest timer offsets).
+  - [x] Offline-tolerant logging: a failed set write is kept in a per-session `localStorage` outbox, shown as "Saved on this device · will sync", counted in a banner with Retry, replayed on `online`, when the app returns to the foreground, every 15 s, and after a reload. Latest intent per set wins; entries older than 24 h are dropped; replay goes through the same revision-checked, per-set serialized write path. Pure logic (queue rules, row matching) is unit-tested.
+  - [x] Web Push: `public/sw.js` (push + notification click only; **caches nothing**), registered on load; Settings → Notifications card (enable, test, disable, and clear guidance for iOS-not-installed / blocked / unsupported); VAPID keys in env; `web-push` on the server; invites push to the buddy's devices when a workout starts with "Train with buddy" or when the host invites mid-workout. Targets come from SECURITY DEFINER DB functions scoped to the host's own live session (`invited_push_targets`, `prune_push_subscription`); dead endpoints (404/410) are pruned; sending is best-effort and never blocks the invite.
+  - [x] DB tests: `supabase/tests/push_targets.sql` (private subscriptions, host sees only the invitee's endpoint, stranger sees none, prune is scoped, declined buddy stops being a target, https-only endpoints).
+  - [ ] **Manual checks on iPhone (iOS 16.4+)**: add to Home Screen from Safari; Settings → Notifications → turn on → "Send a test"; second account starts a workout with you → push arrives with the app closed and tapping it opens the invite; airplane-mode a set, then reconnect and confirm it syncs (also after force-quitting the app while offline).
+- **Deployment**: set `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` in the hosting environment (see `.env.example`); generated locally keys are in the git-ignored `.env.local`. Push only works over HTTPS (localhost is exempt).
+- **Not covered by design**: the app shell is not cached, so the very first open after a cold start needs a connection; only set logging is offline-tolerant (add/skip exercise, finish and discard still need a connection).
+- **Verification**: `pnpm test` 37 passing; ESLint clean; type-check clean for source; `next build` of a clean copy succeeded (13 routes); `/sw.js` served with `no-store` + restrictive CSP; DB test `push_targets` and all earlier DB tests `ALL_PASSED`. Offline path exercised in the browser pane with a simulated network failure: set saved locally, banner and row note shown, entry persisted. The reload-replay path could not be shown in the pane (it was hidden, which stalls React streaming), so that path is covered by unit tests of its logic only.
 
 ## Milestone 22: Verification & Consistency Pass
 - **Status**: NOT STARTED

@@ -21,6 +21,7 @@ import {
 import { UserCheck, Plus, Trash2, Loader2, AlertCircle, TrendingDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toCanonicalKg, toPreferredWeight } from "@/lib/units";
+import { parseLocalDate } from "@/lib/utils";
 
 export function BodyMetricsCard({ initialMetrics, unit }: { initialMetrics: BodyMetricEntry[]; unit: "kg" | "lb" }) {
   const router = useRouter();
@@ -37,7 +38,7 @@ export function BodyMetricsCard({ initialMetrics, unit }: { initialMetrics: Body
 
   const chartData = React.useMemo(() => {
     return metrics.map((m) => ({
-      date: new Date(m.recorded_date).toLocaleDateString("en-US", {
+      date: parseLocalDate(m.recorded_date).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
       }),
@@ -123,7 +124,7 @@ export function BodyMetricsCard({ initialMetrics, unit }: { initialMetrics: Body
               </div>
             )}
             <span className="ml-auto text-xs text-zinc-500 font-mono">
-              Recorded on {new Date(latest.recorded_date).toLocaleDateString()}
+              Recorded on {parseLocalDate(latest.recorded_date).toLocaleDateString("en-US")}
             </span>
           </div>
         )}
@@ -188,7 +189,7 @@ export function BodyMetricsCard({ initialMetrics, unit }: { initialMetrics: Body
                 <div key={m.id} className="flex items-center justify-between p-2.5 text-xs">
                   <div className="flex items-center gap-3">
                     <span className="text-zinc-400 font-mono">
-                      {new Date(m.recorded_date).toLocaleDateString("en-US", {
+                      {parseLocalDate(m.recorded_date).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                       })}

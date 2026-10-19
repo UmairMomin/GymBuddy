@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { startWorkoutAction, type TodayData } from "@/features/workout/actions";
 import { WEEKDAY_LABELS } from "@/features/plan/schemas";
+import { InstallPrompt } from "@/features/notifications/components/install-prompt";
 import { cn } from "@/lib/utils";
 
 /** Today's weekday (0 = Monday) from the device clock. -1 on the server so hydration matches. */
@@ -227,6 +228,8 @@ export function TodayView({ data }: { data: TodayData }) {
           ))}
         </section>
       )}
+
+      <InstallPrompt />
 
       <Sheet open={pickerOpen} onClose={() => setPickerOpen(false)} title="Start a workout">
         <ul className="space-y-2 pt-2">

@@ -13,3 +13,9 @@ export function getInitials(name: string): string {
   const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
   return `${first}${last}`.toUpperCase();
 }
+
+/** Parse a date-only string ("2026-10-18") as that calendar day in local time (new Date(str) would use UTC midnight). */
+export function parseLocalDate(isoDate: string): Date {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}

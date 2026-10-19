@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 /** Routes reachable without a session. Everything else requires sign-in. */
-const PUBLIC_PATHS = new Set(["/login", "/manifest.json"]);
+const PUBLIC_PATHS = new Set(["/login", "/manifest.json", "/sw.js"]);
 
 /** Only same-origin relative paths are accepted as a post-login destination. */
 function safeNext(value: string | null): string {

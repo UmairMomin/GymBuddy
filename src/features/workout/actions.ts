@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser, SIGN_IN_REQUIRED } from "@/lib/supabase/require-user";
 import { idSchema, saveSetSchema, type SaveSetInput } from "@/features/workout/schemas";
 import type { PlanExercise } from "@/features/plan/actions";
+import { sendInvitePush } from "@/features/notifications/push";
 
 export type ActionResult<T = unknown> = { data?: T; error?: string; success?: boolean };
 
@@ -242,6 +243,8 @@ export async function startWorkoutAction(
     if (error.code === "23505") return { error: "You already have a workout in progress" };
     return { error: rpcMessage(error) };
   }
+
+  if (withBuddy) await notifyInvitedBuddy(supabase, user.id, sessionId, name);
 
   revalidatePath("/");
   return { data: { id: sessionId } };
@@ -663,5 +666,14 @@ export async function inviteBuddyAction(sessionId: string): Promise<ActionResult
 
   const { error } = await supabase.rpc("invite_buddy_to_session", { p_session_id: sessionId });
   if (error) return { error: rpcMessage(error) };
+
+  const { data: session } = await supabase.from("workout_sessions").select("name").eq("id", sessionId).maybeSingle();
+  await notifyInvitedBuddy(supabase, user.id, sessionId, session?.name ?? "a workout");
   return { success: true };
+}
+
+/** Push the invite to the buddy's devices (best effort; the in-app banner and share link still work). */
+async function notifyInvitedBuddy(supabase: Supa, hostId: string, sessionId: string, sessionName: string) {
+  const { data: me } = await supabase.from("profiles").select("display_name").eq("id", hostId).maybeSingle();
+  await sendInvitePush(supabase, sessionId, me?.display_name ?? "Your buddy", sessionName);
 }

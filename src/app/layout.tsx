@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { MobileNavigation } from "@/components/layout/mobile-navigation";
 import { DesktopNavigation } from "@/components/layout/desktop-navigation";
 import { UserMenu } from "@/components/layout/user-menu";
+import { ServiceWorkerRegister } from "@/features/notifications/components/service-worker-register";
 import { InviteBanner } from "@/features/workout/components/invite-banner";
 import { NetworkStatusIndicator } from "@/components/layout/network-status-indicator";
 import { ThemeScript, ThemeSync } from "@/components/layout/theme-script";
@@ -24,9 +25,10 @@ const barlowCondensed = Barlow_Condensed({
 
 export const metadata: Metadata = {
   title: "Gym Tracker",
-  description: "Collaborative workout tracking for groups and workout partners.",
+  description: "Track your training week and log workouts live with a friend.",
   applicationName: "Gym Tracker",
   manifest: "/manifest.json",
+  icons: { icon: "/icon.svg", apple: "/apple-touch-icon.png" },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -57,6 +59,7 @@ export default function RootLayout({
         className={`${barlow.variable} ${barlowCondensed.variable} min-h-screen bg-zinc-950 text-zinc-50 antialiased selection:bg-emerald-500 selection:text-accent-ink`}
       >
         <ThemeSync />
+        <ServiceWorkerRegister />
         <NetworkStatusIndicator />
         <Suspense fallback={null}>
           <InviteBanner />

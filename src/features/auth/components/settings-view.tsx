@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AppearanceCard } from "@/features/auth/components/appearance-card";
+import { PushSettingsCard } from "@/features/notifications/components/push-settings-card";
 
 export function SettingsView({ initialSettings }: { initialSettings: UserProfileSettings }) {
   const router = useRouter();
@@ -103,6 +104,8 @@ export function SettingsView({ initialSettings }: { initialSettings: UserProfile
       )}
 
       <AppearanceCard />
+
+      <PushSettingsCard />
 
       {/* UNIT PREFERENCE CARD */}
       <Card className="border-zinc-800 bg-zinc-900/60 backdrop-blur">

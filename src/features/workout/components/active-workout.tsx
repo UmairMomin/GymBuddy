@@ -18,11 +18,21 @@ import {
   saveSetAction,
   setExerciseSkippedAction,
   type RosterEntry,
+  type SaveSetResult,
   type SessionExerciseView,
   type SetRow,
   type WorkoutData,
 } from "@/features/workout/actions";
 import { RestTimerDock, formatClock, useNow, type RestState } from "@/features/workout/components/rest-timer-dock";
+import {
+  matchEntryToRow,
+  outboxKey,
+  readOutbox,
+  removeEntry,
+  upsertEntry,
+  writeOutbox,
+  type OutboxEntry,
+} from "@/features/workout/outbox";
 import { reconcile, shouldAdopt } from "@/features/workout/sync";
 import { useSessionRealtime, type SetChange } from "@/features/workout/use-session-realtime";
 import { toCanonicalKg, toPreferredWeight } from "@/lib/units";
@@ -41,6 +51,8 @@ type Row = {
   error: string | null;
   /** Name of someone other than the owner who last edited this set, if any. */
   editedBy: string | null;
+  /** Couldn't reach the server; the latest values are kept on this device and will sync. */
+  queued: boolean;
 };
 
 type ExerciseState = Omit<SessionExerciseView, "sets"> & { rows: Row[]; partnerRows: Row[] };
@@ -49,10 +61,19 @@ type Lane = "me" | "partner";
 /** Wall-clock time for event handlers (kept outside the component body so render stays pure). */
 const nowMs = () => Date.now();
 
+/** localStorage can be missing or throw (private mode, blocked site data). */
+function safeStorage(): Storage | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 
 function emptyRow(owner: string, order: number): Row {
-  return { id: crypto.randomUUID(), owner, order, weight: "", reps: "", completed: false, saved: false, error: null, editedBy: null };
+  return { id: crypto.randomUUID(), owner, order, weight: "", reps: "", completed: false, saved: false, error: null, editedBy: null, queued: false };
 }
 
 function rowFromSet(set: SetRow, unit: "kg" | "lb", me: string, nameOf: (id: string) => string): Row {
@@ -66,6 +87,7 @@ function rowFromSet(set: SetRow, unit: "kg" | "lb", me: string, nameOf: (id: str
     saved: true,
     error: null,
     editedBy: set.last_edited_by !== set.user_id ? (set.last_edited_by === me ? "you" : nameOf(set.last_edited_by)) : null,
+    queued: false,
   };
 }
 
@@ -157,7 +179,10 @@ function SetRowView({
         </button>
       </div>
       {row.error && <p role="alert" className="mt-1 pl-9 text-xs text-red-400">{row.error}</p>}
-      {row.editedBy && !row.error && <p className="mt-0.5 pl-9 text-[11px] text-zinc-500">edited by {row.editedBy}</p>}
+      {row.queued && !row.error && (
+        <p className="mt-0.5 pl-9 text-[11px] text-amber-400">Saved on this device · will sync when you&rsquo;re back online</p>
+      )}
+      {row.editedBy && !row.error && !row.queued && <p className="mt-0.5 pl-9 text-[11px] text-zinc-500">edited by {row.editedBy}</p>}
     </div>
   );
 }
@@ -210,6 +235,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const [query, setQuery] = React.useState("");
   const [banner, setBanner] = React.useState<string | null>(null);
   const [busy, startTransition] = React.useTransition();
+  const [queuedCount, setQueuedCount] = React.useState(0);
 
   // Per-set write queue, in-flight set ids and latest known revisions: rapid taps never race or go stale.
   const queues = React.useRef(new Map<string, Promise<unknown>>());
@@ -252,34 +278,60 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   }
 
   // ---- writes ---------------------------------------------------------------------------------
-  /** Queue a write for one set; applies the server's answer (revision, or the winning values on conflict). */
-  function persist(e: ExerciseState, row: Row, values: { weight: number; reps: number; completed: boolean }) {
-    const run = async () => {
-      const res = await saveSetAction({
-        id: row.id,
-        session_id: session.id,
-        exercise_id: e.exercise_id,
-        user_id: row.owner,
-        set_order: row.order,
-        set_type: "normal",
-        weight_kg: toCanonicalKg(values.weight, unit),
-        reps: values.reps,
-        completed: values.completed,
-        expected_revision: revisions.current.get(row.id) ?? null,
-      });
-      if (res.data) {
-        revisions.current.set(row.id, res.data.revision_number);
-        if (res.conflict) {
-          patchRow(e.id, row.id, {
-            ...rowFromSet(res.data, unit, userId, nameOf),
-            error: res.error ?? null,
-          });
-        } else {
-          patchRow(e.id, row.id, { saved: true, error: null });
-        }
+  // ---- offline outbox -------------------------------------------------------------------------
+  const storageKey = outboxKey(userId, session.id);
+  const readQueue = () => readOutbox(safeStorage(), storageKey, nowMs());
+  const writeQueue = (list: OutboxEntry[]) => {
+    writeOutbox(safeStorage(), storageKey, list);
+    setQueuedCount(list.length);
+  };
+  const enqueue = (entry: OutboxEntry) => writeQueue(upsertEntry(readQueue(), entry));
+  const dequeue = (id: string) => {
+    const cur = readQueue();
+    if (cur.some((e) => e.id === id)) writeQueue(removeEntry(cur, id));
+  };
+
+  /** Apply the server's answer for one set (revision, or the winning values on a conflict). */
+  function applySaveResult(exId: string, row: Row, res: SaveSetResult) {
+    if (res.data) {
+      revisions.current.set(row.id, res.data.revision_number);
+      if (res.conflict) {
+        patchRow(exId, row.id, { ...rowFromSet(res.data, unit, userId, nameOf), error: res.error ?? null });
       } else {
-        patchRow(e.id, row.id, { error: res.error ?? "Couldn't save", completed: row.saved ? row.completed : false });
+        patchRow(exId, row.id, { saved: true, queued: false, error: null });
       }
+    } else {
+      patchRow(exId, row.id, { error: res.error ?? "Couldn't save", queued: false, completed: row.saved ? row.completed : false });
+    }
+  }
+
+  /**
+   * Queue a write for one set. Writes per set are serialized; if the server can't be reached the latest
+   * values are kept in the outbox and replayed later instead of failing the tap.
+   */
+  function persist(e: ExerciseState, row: Row, values: { weight: number; reps: number; completed: boolean }) {
+    const payload = {
+      id: row.id,
+      session_id: session.id,
+      exercise_id: e.exercise_id,
+      user_id: row.owner,
+      set_order: row.order,
+      set_type: "normal" as const,
+      weight_kg: toCanonicalKg(values.weight, unit),
+      reps: values.reps,
+      completed: values.completed,
+    };
+    const run = async () => {
+      let res: SaveSetResult;
+      try {
+        res = await saveSetAction({ ...payload, expected_revision: revisions.current.get(row.id) ?? null });
+      } catch {
+        enqueue({ ...payload, queued_at: nowMs() });
+        patchRow(e.id, row.id, { queued: true, error: null });
+        return;
+      }
+      dequeue(row.id);
+      applySaveResult(e.id, row, res);
     };
     const prior = queues.current.get(row.id) ?? Promise.resolve();
     pending.current.add(row.id);
@@ -288,6 +340,107 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     });
     queues.current.set(row.id, p);
   }
+
+  /** Replay one queued write through the same per-set queue. Resolves false while still offline. */
+  function sendQueued(entry: OutboxEntry): Promise<boolean> {
+    const { queued_at: _queuedAt, ...payload } = entry;
+    void _queuedAt;
+    const exId = exercisesRef.current.find((x) => x.exercise_id === entry.exercise_id)?.id;
+    const run = async (): Promise<boolean> => {
+      let res: SaveSetResult;
+      try {
+        res = await saveSetAction({ ...payload, expected_revision: revisions.current.get(entry.id) ?? null });
+      } catch {
+        return false;
+      }
+      dequeue(entry.id);
+      if (exId) {
+        const row = [...(exercisesRef.current.find((x) => x.id === exId)?.rows ?? []), ...(exercisesRef.current.find((x) => x.id === exId)?.partnerRows ?? [])].find((r) => r.id === entry.id);
+        if (row) applySaveResult(exId, row, res);
+      }
+      return true;
+    };
+    const prior = queues.current.get(entry.id) ?? Promise.resolve();
+    pending.current.add(entry.id);
+    const p: Promise<boolean> = prior.then(run, run);
+    const settled = p.finally(() => {
+      if (queues.current.get(entry.id) === settled) pending.current.delete(entry.id);
+    });
+    queues.current.set(entry.id, settled);
+    return p;
+  }
+
+  const flushing = React.useRef(false);
+  async function flushOutbox() {
+    if (flushing.current) return; // a slow flush is still running; don't send the same set twice
+    flushing.current = true;
+    try {
+      for (const entry of readQueue()) {
+        if (!(await sendQueued(entry))) break; // still offline: try again later
+      }
+    } finally {
+      flushing.current = false;
+    }
+  }
+
+  /** After a reload: show what is still waiting to sync, on top of the server's data. */
+  function overlayOutbox() {
+    const entries = readQueue();
+    setQueuedCount(entries.length);
+    if (entries.length === 0) return;
+    const partnerId = data.roster.find((r) => !r.isMe && (r.status === "joined" || r.status === "left"))?.userId ?? null;
+    setExercises((prev) =>
+      prev.map((e) => {
+        const mine = entries.filter((x) => x.exercise_id === e.exercise_id);
+        if (mine.length === 0) return e;
+        const apply = (rows: Row[], owner: string) => {
+          const out = [...rows];
+          for (const x of mine.filter((m) => m.user_id === owner)) {
+            const patch = {
+              weight: x.weight_kg > 0 ? fmt(toPreferredWeight(x.weight_kg, unit)) : "",
+              reps: x.reps > 0 ? String(x.reps) : "",
+              completed: x.completed,
+              queued: true,
+              error: null,
+            };
+            const i = matchEntryToRow(out, x);
+            if (i >= 0) out[i] = { ...out[i], id: x.id, ...patch };
+            else out.push({ ...emptyRow(owner, x.set_order), id: x.id, ...patch });
+          }
+          return out.sort((a, b) => a.order - b.order);
+        };
+        return {
+          ...e,
+          rows: apply(e.rows, userId),
+          partnerRows: partnerId ? apply(e.partnerRows, partnerId) : e.partnerRows,
+        };
+      })
+    );
+  }
+
+  const outboxRef = React.useRef({ overlayOutbox, flushOutbox });
+  React.useEffect(() => {
+    outboxRef.current = { overlayOutbox, flushOutbox };
+  });
+  React.useEffect(() => {
+    void (async () => {
+      await Promise.resolve(); // not synchronously inside the effect
+      outboxRef.current.overlayOutbox();
+      await outboxRef.current.flushOutbox();
+    })();
+    const retry = () => void outboxRef.current.flushOutbox();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") retry();
+    };
+    window.addEventListener("online", retry);
+    document.addEventListener("visibilitychange", onVisible);
+    const timer = setInterval(retry, 15000);
+    return () => {
+      window.removeEventListener("online", retry);
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(timer);
+    };
+  }, []);
 
   function startRest(seconds: number) {
     const next = { endsAt: nowMs() + seconds * 1000, total: seconds };
@@ -600,6 +753,17 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
               </Button>
             </>
           )}
+        </div>
+      )}
+
+      {queuedCount > 0 && (
+        <div role="status" className="mb-3 flex items-center gap-3 rounded-2xl bg-amber-400/10 px-3.5 py-2.5 text-sm text-zinc-100">
+          <span className="min-w-0 flex-1">
+            {queuedCount} {queuedCount === 1 ? "set is" : "sets are"} waiting to sync. They&rsquo;re saved on this device.
+          </span>
+          <Button size="sm" variant="secondary" onClick={() => void flushOutbox()}>
+            Retry
+          </Button>
         </div>
       )}
 

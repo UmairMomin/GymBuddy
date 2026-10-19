@@ -597,6 +597,14 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      invited_push_targets: {
+        Args: { p_session_id: string }
+        Returns: {
+          auth: string
+          endpoint: string
+          p256dh: string
+        }[]
+      }
       is_linked_with: { Args: { _other: string }; Returns: boolean }
       is_session_member: { Args: { _session: string }; Returns: boolean }
       is_session_member_user: {
@@ -611,7 +619,15 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      prune_push_subscription: {
+        Args: { p_endpoint: string; p_session_id: string }
+        Returns: undefined
+      }
       request_buddy: { Args: { p_username: string }; Returns: string }
+      save_push_subscription: {
+        Args: { p_auth: string; p_endpoint: string; p_p256dh: string }
+        Returns: undefined
+      }
       save_routine: {
         Args: {
           p_description: string
