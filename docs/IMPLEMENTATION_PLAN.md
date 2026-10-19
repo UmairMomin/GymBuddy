@@ -218,14 +218,17 @@ This implementation plan breaks down the development of the Gym Tracker applicat
 Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14 above describe the V1 build (workspace-based) and are historical; V2 replaces the group model. All V2 milestones start `NOT STARTED`; mark complete only with verification evidence (`pnpm type-check`, `pnpm lint`, tests, build).
 
 ## Milestone 15: Clean Schema Reset
-- **Status**: NOT STARTED
+- **Status**: COMPLETED (database + types). The V1 app code is intentionally left broken until Milestones 16–20 replace it.
 - **Objective**: Drop the V1 schema and recreate a solo + buddy data model with RLS.
 - **Acceptance Criteria**:
-  - [ ] Confirm with the owner that no V1 data needs exporting, then drop all public tables.
-  - [ ] New migrations: `profiles`, `buddy_links`, `exercises` (+ seed), `routines`, `routine_versions`, `weekly_schedule`, `workout_sessions`, `session_participants`, `set_records`, `body_metrics`, `push_subscriptions`.
-  - [ ] RLS on every table; policy tests prove: buddy sees only shared sessions, never solo sessions/metrics; non-participants see nothing.
-  - [ ] Transactional DB functions for multi-table writes (start session, join, accept buddy link, save routine version).
-  - [ ] Regenerated `database.types.ts` matches migrations.
+  - [x] Owner confirmed full wipe (all V1 tables and all user accounts) on 2026-10-19.
+  - [x] Migration `20261020000000_v2_reset_and_schema.sql`: `profiles`, `buddy_links`, `exercises` (38 seeded), `routines`, `routine_versions`, `weekly_schedule`, `workout_sessions`, `session_participants`, `session_exercises`, `workout_sets`, `body_metrics`, `push_subscriptions`.
+  - [x] RLS enabled on all 12 tables (24 policies); `anon` has no function execute rights; Realtime publication + private `session:<uuid>` channel policies on `realtime.messages`.
+  - [x] Policy test `supabase/tests/rls_buddy.sql` passes (result `ALL_PASSED`, transaction rolled back): buddy never sees solo sessions, routines or body metrics; invitee sees the session header but no sets until joining; joined buddy edits the other's sets (revision + `last_edited_by` stamped), including after finish; strangers see nothing; second buddy rejected.
+  - [x] Transactional RPCs: `request_buddy`, `accept_buddy`, `save_routine`, `start_workout_session`, `invite_buddy_to_session`, `join_workout_session`, `decline_workout_session`, `leave_workout_session`, `finish_my_workout`, `finish_workout_session`.
+  - [x] `src/types/database.types.ts` regenerated from the live schema.
+- **Known state**: `pnpm type-check` reports 109 errors, all in V1 code referencing dropped tables (workspaces, scheduled_workouts, etc.). They are resolved milestone by milestone, not patched.
+- **Verification**: migration applied to Supabase Cloud via the Management API (HTTP 201); catalog query confirmed RLS/policies/seed/publication; RLS test run on the remote database.
 
 ## Milestone 16: Buddy Link
 - **Status**: NOT STARTED

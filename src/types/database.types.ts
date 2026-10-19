@@ -52,46 +52,88 @@ export type Database = {
           },
         ]
       }
+      buddy_links: {
+        Row: {
+          addressee_id: string
+          created_at: string
+          id: string
+          requester_id: string
+          responded_at: string | null
+          status: string
+        }
+        Insert: {
+          addressee_id: string
+          created_at?: string
+          id?: string
+          requester_id: string
+          responded_at?: string | null
+          status?: string
+        }
+        Update: {
+          addressee_id?: string
+          created_at?: string
+          id?: string
+          requester_id?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "buddy_links_addressee_id_fkey"
+            columns: ["addressee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "buddy_links_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exercises: {
         Row: {
           category: string
           created_at: string
           handle_type: string | null
           id: string
-          is_custom: boolean
+          is_custom: boolean | null
           name: string
           notes: string | null
+          owner_id: string | null
           primary_equipment: string | null
-          workspace_id: string | null
         }
         Insert: {
           category: string
           created_at?: string
           handle_type?: string | null
           id?: string
-          is_custom?: boolean
+          is_custom?: boolean | null
           name: string
           notes?: string | null
+          owner_id?: string | null
           primary_equipment?: string | null
-          workspace_id?: string | null
         }
         Update: {
           category?: string
           created_at?: string
           handle_type?: string | null
           id?: string
-          is_custom?: boolean
+          is_custom?: boolean | null
           name?: string
           notes?: string | null
+          owner_id?: string | null
           primary_equipment?: string | null
-          workspace_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "exercises_workspace_id_fkey"
-            columns: ["workspace_id"]
+            foreignKeyName: "exercises_owner_id_fkey"
+            columns: ["owner_id"]
             isOneToOne: false
-            referencedRelation: "workspaces"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -101,30 +143,65 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           display_name: string
-          email: string
           id: string
-          preferred_unit: "kg" | "lb"
+          preferred_unit: string
           updated_at: string
+          username: string
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
           display_name: string
-          email: string
           id: string
-          preferred_unit?: "kg" | "lb"
+          preferred_unit?: string
           updated_at?: string
+          username: string
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
           display_name?: string
-          email?: string
           id?: string
-          preferred_unit?: "kg" | "lb"
+          preferred_unit?: string
           updated_at?: string
+          username?: string
         }
         Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       routine_versions: {
         Row: {
@@ -139,7 +216,7 @@ export type Database = {
           id?: string
           routine_id: string
           structure_json?: Json
-          version_number?: number
+          version_number: number
         }
         Update: {
           created_at?: string
@@ -161,178 +238,95 @@ export type Database = {
       routines: {
         Row: {
           created_at: string
-          created_by: string
-          day_of_week:
-            | "monday"
-            | "tuesday"
-            | "wednesday"
-            | "thursday"
-            | "friday"
-            | "saturday"
-            | "sunday"
-            | null
           description: string | null
           id: string
           name: string
+          owner_id: string
           updated_at: string
-          workspace_id: string
         }
         Insert: {
           created_at?: string
-          created_by: string
-          day_of_week?:
-            | "monday"
-            | "tuesday"
-            | "wednesday"
-            | "thursday"
-            | "friday"
-            | "saturday"
-            | "sunday"
-            | null
           description?: string | null
           id?: string
           name: string
+          owner_id: string
           updated_at?: string
-          workspace_id: string
         }
         Update: {
           created_at?: string
-          created_by?: string
-          day_of_week?:
-            | "monday"
-            | "tuesday"
-            | "wednesday"
-            | "thursday"
-            | "friday"
-            | "saturday"
-            | "sunday"
-            | null
           description?: string | null
           id?: string
           name?: string
+          owner_id?: string
           updated_at?: string
-          workspace_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "routines_created_by_fkey"
-            columns: ["created_by"]
+            foreignKeyName: "routines_owner_id_fkey"
+            columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "routines_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
         ]
       }
-      scheduled_workouts: {
+      session_exercises: {
         Row: {
           created_at: string
-          created_by: string
+          exercise_id: string
           id: string
-          notes: string | null
-          routine_id: string | null
-          routine_version_id: string | null
-          scheduled_for: string
-          status: "scheduled" | "in_progress" | "completed" | "cancelled" | "missed"
-          updated_at: string
-          workspace_id: string
-        }
-        Insert: {
-          created_at?: string
-          created_by: string
-          id?: string
-          notes?: string | null
-          routine_id?: string | null
-          routine_version_id?: string | null
-          scheduled_for: string
-          status?: "scheduled" | "in_progress" | "completed" | "cancelled" | "missed"
-          updated_at?: string
-          workspace_id: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string
-          id?: string
-          notes?: string | null
-          routine_id?: string | null
-          routine_version_id?: string | null
-          scheduled_for?: string
-          status?: "scheduled" | "in_progress" | "completed" | "cancelled" | "missed"
-          updated_at?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "scheduled_workouts_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scheduled_workouts_routine_id_fkey"
-            columns: ["routine_id"]
-            isOneToOne: false
-            referencedRelation: "routines"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scheduled_workouts_routine_version_id_fkey"
-            columns: ["routine_version_id"]
-            isOneToOne: false
-            referencedRelation: "routine_versions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "scheduled_workouts_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      session_events: {
-        Row: {
-          created_at: string
-          event_type: string
-          id: string
-          payload_json: Json
+          position: number
+          rep_max: number | null
+          rep_min: number | null
+          rest_seconds: number | null
           session_id: string
+          skipped: boolean
+          target_sets: number
           user_id: string
         }
         Insert: {
           created_at?: string
-          event_type: string
+          exercise_id: string
           id?: string
-          payload_json?: Json
+          position: number
+          rep_max?: number | null
+          rep_min?: number | null
+          rest_seconds?: number | null
           session_id: string
+          skipped?: boolean
+          target_sets?: number
           user_id: string
         }
         Update: {
           created_at?: string
-          event_type?: string
+          exercise_id?: string
           id?: string
-          payload_json?: Json
+          position?: number
+          rep_max?: number | null
+          rep_min?: number | null
+          rest_seconds?: number | null
           session_id?: string
+          skipped?: boolean
+          target_sets?: number
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "session_events_session_id_fkey"
+            foreignKeyName: "session_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_exercises_session_id_fkey"
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "workout_sessions"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "session_events_user_id_fkey"
+            foreignKeyName: "session_exercises_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -343,29 +337,42 @@ export type Database = {
       session_participants: {
         Row: {
           completed_at: string | null
+          created_at: string
           id: string
-          joined_at: string
-          notes: string | null
+          invited_by: string | null
+          joined_at: string | null
           session_id: string
+          status: string
           user_id: string
         }
         Insert: {
           completed_at?: string | null
+          created_at?: string
           id?: string
-          joined_at?: string
-          notes?: string | null
+          invited_by?: string | null
+          joined_at?: string | null
           session_id: string
+          status?: string
           user_id: string
         }
         Update: {
           completed_at?: string | null
+          created_at?: string
           id?: string
-          joined_at?: string
-          notes?: string | null
+          invited_by?: string | null
+          joined_at?: string | null
           session_id?: string
+          status?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "session_participants_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "session_participants_session_id_fkey"
             columns: ["session_id"]
@@ -382,10 +389,43 @@ export type Database = {
           },
         ]
       }
+      weekly_schedule: {
+        Row: {
+          routine_id: string | null
+          user_id: string
+          weekday: number
+        }
+        Insert: {
+          routine_id?: string | null
+          user_id: string
+          weekday: number
+        }
+        Update: {
+          routine_id?: string | null
+          user_id?: string
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_schedule_routine_id_fkey"
+            columns: ["routine_id"]
+            isOneToOne: false
+            referencedRelation: "routines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_schedule_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       workout_sessions: {
         Row: {
-          created_by: string
           ended_at: string | null
+          host_id: string
           id: string
           name: string
           notes: string | null
@@ -393,11 +433,10 @@ export type Database = {
           routine_version_id: string | null
           started_at: string
           status: string
-          workspace_id: string
         }
         Insert: {
-          created_by: string
           ended_at?: string | null
+          host_id: string
           id?: string
           name: string
           notes?: string | null
@@ -405,11 +444,10 @@ export type Database = {
           routine_version_id?: string | null
           started_at?: string
           status?: string
-          workspace_id: string
         }
         Update: {
-          created_by?: string
           ended_at?: string | null
+          host_id?: string
           id?: string
           name?: string
           notes?: string | null
@@ -417,12 +455,11 @@ export type Database = {
           routine_version_id?: string | null
           started_at?: string
           status?: string
-          workspace_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "workout_sessions_created_by_fkey"
-            columns: ["created_by"]
+            foreignKeyName: "workout_sessions_host_id_fkey"
+            columns: ["host_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -441,13 +478,6 @@ export type Database = {
             referencedRelation: "routine_versions"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "workout_sessions_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
         ]
       }
       workout_sets: {
@@ -456,7 +486,7 @@ export type Database = {
           created_at: string
           exercise_id: string
           id: string
-          logged_by: string
+          last_edited_by: string
           notes: string | null
           reps: number
           revision_number: number
@@ -473,7 +503,7 @@ export type Database = {
           created_at?: string
           exercise_id: string
           id?: string
-          logged_by: string
+          last_edited_by: string
           notes?: string | null
           reps?: number
           revision_number?: number
@@ -490,7 +520,7 @@ export type Database = {
           created_at?: string
           exercise_id?: string
           id?: string
-          logged_by?: string
+          last_edited_by?: string
           notes?: string | null
           reps?: number
           revision_number?: number
@@ -511,8 +541,8 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "workout_sets_logged_by_fkey"
-            columns: ["logged_by"]
+            foreignKeyName: "workout_sets_last_edited_by_fkey"
+            columns: ["last_edited_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -533,95 +563,69 @@ export type Database = {
           },
         ]
       }
-      workspace_members: {
-        Row: {
-          id: string
-          joined_at: string
-          role: string
-          user_id: string
-          workspace_id: string
-        }
-        Insert: {
-          id?: string
-          joined_at?: string
-          role?: string
-          user_id: string
-          workspace_id: string
-        }
-        Update: {
-          id?: string
-          joined_at?: string
-          role?: string
-          user_id?: string
-          workspace_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspace_members_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workspace_members_workspace_id_fkey"
-            columns: ["workspace_id"]
-            isOneToOne: false
-            referencedRelation: "workspaces"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      workspaces: {
-        Row: {
-          created_at: string
-          created_by: string
-          description: string | null
-          id: string
-          invite_code: string | null
-          name: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          created_by: string
-          description?: string | null
-          id?: string
-          invite_code?: string | null
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string
-          description?: string | null
-          id?: string
-          invite_code?: string | null
-          name?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workspaces_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      join_workspace_by_invite_code: {
-        Args: { _invite_code: string }
-        Returns: Json
+      accept_buddy: { Args: { p_link_id: string }; Returns: undefined }
+      are_buddies: { Args: { _a: string; _b: string }; Returns: boolean }
+      can_view_session: { Args: { _session: string }; Returns: boolean }
+      decline_workout_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
       }
-      is_workspace_member: {
-        Args: { _user_id: string; _workspace_id: string }
+      find_profile_by_username: {
+        Args: { p_username: string }
+        Returns: {
+          display_name: string
+          id: string
+          username: string
+        }[]
+      }
+      finish_my_workout: { Args: { p_session_id: string }; Returns: undefined }
+      finish_workout_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
+      has_accepted_buddy: { Args: { _user: string }; Returns: boolean }
+      invite_buddy_to_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
+      is_linked_with: { Args: { _other: string }; Returns: boolean }
+      is_session_member: { Args: { _session: string }; Returns: boolean }
+      is_session_member_user: {
+        Args: { _session: string; _user: string }
         Returns: boolean
+      }
+      join_workout_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
+      leave_workout_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
+      request_buddy: { Args: { p_username: string }; Returns: string }
+      save_routine: {
+        Args: {
+          p_description: string
+          p_name: string
+          p_routine_id: string
+          p_structure: Json
+          p_weekdays: number[]
+        }
+        Returns: string
+      }
+      start_workout_session: {
+        Args: {
+          p_name: string
+          p_routine_id: string
+          p_session_id: string
+          p_with_buddy: boolean
+        }
+        Returns: string
       }
     }
     Enums: {
