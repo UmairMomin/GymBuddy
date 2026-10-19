@@ -242,13 +242,18 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
 - **Verification**: `pnpm type-check` errors fell 109 → 71, none in M16 files; ESLint clean on `src/features/buddy`, `src/app/buddy`, `src/features/auth`, `src/components/layout`. Signed-out `/buddy` redirects to `/login?next=/buddy`. Remaining type errors are V1 modules (routines, sessions, scheduling, analytics, home) rewritten in M17–M20.
 
 ## Milestone 17: Plan (Schedule, Routines, Exercises)
-- **Status**: NOT STARTED
+- **Status**: COMPLETED (signed-in flow with a real account not yet exercised)
 - **Objective**: One **Plan** tab to build exercises, routines and the weekly split.
 - **Acceptance Criteria**:
-  - [ ] Segmented Schedule | Routines | Exercises; `/exercises` folded into Plan.
-  - [ ] Routine builder: name, days it runs on, exercises with target sets, add from catalog or create inline, reorder/remove.
-  - [ ] Weekly schedule editable; changing it creates no history changes (routine versioning preserved).
-  - [ ] Seed template for Push / Pull / Legs / Push / Pull / Shoulders+Arms (editable).
+  - [x] `/plan` with Schedule | Routines | Exercises tabs (tab kept in `?tab=`); `/routines` and `/exercises` redirect into it; nav shows Plan.
+  - [x] Routine builder (sheet): name, days it runs on (warns when a day's current routine will be replaced), exercises with sets / rep range / rest, reorder (buttons), remove, add from searchable catalog, create exercise inline.
+  - [x] Weekly schedule: per-day routine select (or Rest day) with optimistic update. Saving a routine appends an immutable version, so history is never rewritten.
+  - [x] Starter plan (Push Mon/Thu, Pull Tue/Fri, Legs Wed, Shoulders + Arms Sat, Sun rest) via `seed_starter_plan()`, offered when you have no routines.
+  - [x] Deleting a routine archives it (`routines.archived_at`) and unschedules it; session snapshots stay valid.
+  - [x] Custom exercise create / edit / delete (delete refused with a clear message if used in history).
+  - [x] DB hardening: `save_routine` rejects exercise ids the caller cannot see; tests in `supabase/tests/plan_seed.sql` and `rls_buddy.sql` pass (`ALL_PASSED`).
+  - [ ] Manual check with a real account (create routine, change days, delete). Needs a real login.
+- **Verification**: ESLint clean on `src/features/plan`, `src/features/buddy`, `src/components`, `src/app`; no type errors in M17 files (total errors 63 → 56, remaining ones are the unreferenced V1 modules `sessions`, `scheduling`, `analytics`). UI checked at 375px in the browser pane with a temporary mock-data fixture (removed): routines list, builder, day-conflict warning, exercise picker. Migrations `20261020000001`, `20261020000002` applied to Supabase Cloud.
 
 ## Milestone 18: Today + Solo Workout Engine
 - **Status**: NOT STARTED

@@ -237,6 +237,7 @@ export type Database = {
       }
       routines: {
         Row: {
+          archived_at: string | null
           created_at: string
           description: string | null
           id: string
@@ -245,6 +246,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -253,6 +255,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -569,6 +572,7 @@ export type Database = {
     }
     Functions: {
       accept_buddy: { Args: { p_link_id: string }; Returns: undefined }
+      archive_routine: { Args: { p_routine_id: string }; Returns: undefined }
       are_buddies: { Args: { _a: string; _b: string }; Returns: boolean }
       can_view_session: { Args: { _session: string }; Returns: boolean }
       decline_workout_session: {
@@ -618,6 +622,7 @@ export type Database = {
         }
         Returns: string
       }
+      seed_starter_plan: { Args: never; Returns: undefined }
       start_workout_session: {
         Args: {
           p_name: string
