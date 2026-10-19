@@ -12,7 +12,19 @@ test("solo: plan, log a workout with placeholders, finish, history, edit after f
 
   // Workout: first exercise is the bench press; type set 1, then accept placeholders for set 2
   await startPush(page);
-  await expect(page.getByRole("heading", { name: /barbell bench press/i })).toBeVisible();
+  await expect(page.getByRole("region", { name: /barbell bench press/i })).toBeVisible();
+
+  // Exercises are stacked and collapsible: the first is open, the next ones are collapsed one-line cards
+  const bench = page.getByRole("button", { name: /^Barbell Bench Press/ });
+  const incline = page.getByRole("button", { name: /^Incline Dumbbell Press/ });
+  await expect(bench).toHaveAttribute("aria-expanded", "true");
+  await expect(incline).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("button", { name: /^(Prev|Next)/ })).toHaveCount(0); // no arrow navigation
+  await incline.click();
+  await expect(incline).toHaveAttribute("aria-expanded", "true");
+  await expect(bench).toHaveAttribute("aria-expanded", "true"); // opening one does not close another
+  await incline.click(); // collapse it again
+  await expect(incline).toHaveAttribute("aria-expanded", "false");
   await logSet(page, "Your", 1, "60", "8");
   // No rest timer: logging a set never starts one
   await expect(page.getByRole("timer")).toHaveCount(0);

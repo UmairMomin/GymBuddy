@@ -5,7 +5,7 @@ test("offline: a set logged without a connection is kept and syncs when back onl
   const { page, context } = await newPlayer(browser, "offl");
   await loadStarterPlan(page);
   await startPush(page);
-  await expect(page.getByRole("heading", { name: /barbell bench press/i })).toBeVisible();
+  await expect(page.getByRole("region", { name: /barbell bench press/i })).toBeVisible();
 
   // Lose the connection, log a set: the tap still works and the set is held on the device
   await context.setOffline(true);

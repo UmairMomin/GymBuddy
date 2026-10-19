@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronLeft, ChevronRight, Loader2, MoreHorizontal, Plus, Search, Share2, UserPlus } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronUp, Loader2, MoreHorizontal, Plus, Search, Share2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
@@ -196,6 +196,183 @@ function SetRowView({
   );
 }
 
+function repRange(ex: { rep_min: number | null; rep_max: number | null }): string {
+  if (ex.rep_min == null) return "";
+  return ex.rep_max && ex.rep_max !== ex.rep_min ? `${ex.rep_min}–${ex.rep_max}` : String(ex.rep_min);
+}
+
+/** One exercise as a card that opens and closes. Closed it is a one-line summary; open it holds the set rows. */
+function ExerciseCard({
+  ex,
+  open,
+  view,
+  unit,
+  unitLabel,
+  hasBuddy,
+  partnerName,
+  partnerFirst,
+  placeholderFor,
+  onToggle,
+  onMenu,
+  onField,
+  onBlurRow,
+  onToggleRow,
+  onOpenBuddy,
+  onAddSet,
+  onRestore,
+}: {
+  ex: ExerciseState;
+  open: boolean;
+  view: "all" | "me" | "sam";
+  unit: "kg" | "lb";
+  unitLabel: string;
+  hasBuddy: boolean;
+  partnerName: string;
+  partnerFirst: string;
+  placeholderFor: (lane: Lane, index: number) => { weight: string; reps: string };
+  onToggle: () => void;
+  onMenu: () => void;
+  onField: (rowId: string, field: "weight" | "reps", value: string) => void;
+  onBlurRow: (row: Row) => void;
+  onToggleRow: (lane: Lane, index: number) => void;
+  onOpenBuddy: () => void;
+  onAddSet: () => void;
+  onRestore: () => void;
+}) {
+  const mineDone = ex.rows.filter((r) => r.completed).length;
+  const theirDone = ex.partnerRows.filter((r) => r.completed);
+  const reps = repRange(ex);
+
+  if (!open) {
+    const parts = [
+      `${ex.target_sets} sets`,
+      reps ? `${reps} reps` : "",
+      ex.skipped ? "skipped" : `you ${mineDone}/${ex.rows.length}`,
+      hasBuddy && !ex.skipped ? `${partnerFirst} ${theirDone.length}/${ex.partnerRows.length}` : "",
+    ].filter(Boolean);
+    return (
+      <section aria-label={ex.name}>
+        <button
+          type="button"
+          aria-expanded={false}
+          onClick={onToggle}
+          className="flex min-h-[60px] w-full items-center gap-3 rounded-[18px] border border-zinc-800 bg-zinc-900 p-3.5 text-left transition-colors hover:bg-zinc-800/60"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-display text-xl font-bold uppercase leading-tight tracking-wide">{ex.name}</p>
+            <p className="truncate text-[13px] text-zinc-400">{parts.join(" · ")}</p>
+          </div>
+          <ChevronDown aria-hidden className="h-5 w-5 shrink-0 text-zinc-400" />
+        </button>
+      </section>
+    );
+  }
+
+  const lane = view === "sam" ? ex.partnerRows : ex.rows;
+  const laneTone: Lane = view === "sam" ? "partner" : "me";
+  const laneWho = view === "sam" ? `${partnerName}'s` : "Your";
+  const pill = view === "sam" ? `${theirDone.length} / ${ex.partnerRows.length} sets` : `${mineDone} / ${ex.rows.length} sets`;
+
+  return (
+    <section aria-label={ex.name} className="rounded-[18px] border border-zinc-800 bg-zinc-900 p-3.5">
+      <div className="mb-2.5 flex items-start justify-between gap-2">
+        <button type="button" aria-expanded onClick={onToggle} className="min-w-0 flex-1 text-left">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate font-display text-[22px] font-bold uppercase leading-tight tracking-wide">{ex.name}</span>
+            <ChevronUp aria-hidden className="h-5 w-5 shrink-0 text-zinc-400" />
+          </span>
+          {ex.last.length > 0 ? (
+            <span className="block text-xs text-zinc-400">
+              Last time: {ex.last.map((l) => `${fmt(toPreferredWeight(l.weight_kg, unit))}×${l.reps}`).join(", ")} {unit}
+            </span>
+          ) : (
+            reps && <span className="block text-xs text-zinc-400">Target: {ex.target_sets} × {reps}</span>
+          )}
+        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <span
+            className={cn(
+              "rounded-full border bg-zinc-950 px-2.5 py-0.5 font-display text-xs font-bold uppercase tracking-wider",
+              view === "sam" ? "border-[#a8cbff] text-sky-300" : "border-emerald-500 text-emerald-400"
+            )}
+          >
+            {pill}
+          </span>
+          <Button variant="ghost" size="icon" aria-label={`Options for ${ex.name}`} onClick={onMenu}>
+            <MoreHorizontal className="h-5 w-5 text-zinc-400" />
+          </Button>
+        </div>
+      </div>
+
+      {ex.skipped ? (
+        <div className="space-y-2 rounded-2xl border border-dashed border-zinc-700 p-4 text-center">
+          <p className="text-sm text-zinc-400">Skipped for today.</p>
+          <Button variant="secondary" onClick={onRestore}>Restore exercise</Button>
+        </div>
+      ) : (
+        <>
+          <div className="mb-1 grid grid-cols-[34px_minmax(0,1fr)_minmax(0,1fr)_48px] gap-2 text-center text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
+            <span>Set</span>
+            <span>{unitLabel}</span>
+            <span>Reps</span>
+            <span />
+          </div>
+          <ol className="space-y-1.5">
+            {lane.map((row, i) => (
+              <li key={row.id}>
+                <SetRowView
+                  row={row}
+                  label={String(i + 1)}
+                  number={i + 1}
+                  tone={laneTone}
+                  unit={unit}
+                  who={laneWho}
+                  placeholder={placeholderFor(laneTone, i)}
+                  isNext={!row.completed && lane.slice(0, i).every((r) => r.completed)}
+                  onField={(field, value) => onField(row.id, field, value)}
+                  onBlur={() => onBlurRow(row)}
+                  onToggle={() => onToggleRow(laneTone, i)}
+                />
+              </li>
+            ))}
+          </ol>
+
+          {/* All view: your buddy's progress in one line; tap to open and correct their sets */}
+          {view === "all" && hasBuddy && (
+            <button
+              type="button"
+              onClick={onOpenBuddy}
+              aria-label={`Open ${partnerName}'s sets`}
+              className="mt-2.5 flex min-h-[44px] w-full items-center gap-2 border-t border-dashed border-zinc-800 pt-2.5 text-left text-[13px] text-zinc-400"
+            >
+              <span className="font-display text-sm font-bold uppercase tracking-wider text-sky-300">{partnerFirst}</span>
+              <span className="min-w-0 flex-1 truncate tabular-nums">
+                {theirDone.length > 0 ? theirDone.map((r) => `${r.weight}×${r.reps}`).join(" · ") : "No sets yet"}
+              </span>
+              <span className="shrink-0 font-semibold text-sky-300">
+                {theirDone.length} / {ex.partnerRows.length}
+              </span>
+            </button>
+          )}
+          {view === "sam" && (
+            <p className="mt-2 text-xs text-zinc-500">Correcting {partnerName}&rsquo;s sets. Edits are marked &ldquo;edited by you&rdquo;.</p>
+          )}
+
+          <Button variant="outline" className="mt-2.5 h-11 w-full border-dashed text-zinc-400" onClick={onAddSet}>
+            <Plus className="h-4 w-4" /> Add set
+          </Button>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** First exercise that still has sets to log (the one to start open); falls back to the first. */
+function firstOpenId(list: SessionExerciseView[]): string | null {
+  const next = list.find((e) => !e.skipped && e.sets.filter((s) => s.completed).length < e.target_sets) ?? list[0];
+  return next?.id ?? null;
+}
+
 export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const router = useRouter();
   const { unit, session, userId } = data;
@@ -233,12 +410,15 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     exercisesRef.current = exercises;
   });
 
-  const [current, setCurrent] = React.useState(() => {
-    const i = data.exercises.findIndex((e) => !e.skipped && e.sets.filter((s) => s.completed).length < e.target_sets);
-    return i === -1 ? 0 : i;
+  // Which exercise cards are open. The first with sets left to log starts open; any card can be opened or closed.
+  const [expanded, setExpanded] = React.useState<Set<string>>(() => {
+    const id = firstOpenId(data.exercises);
+    return new Set(id ? [id] : []);
   });
+  /** The exercise you last opened or logged on; shared with your buddy as presence. */
+  const [focusId, setFocusId] = React.useState<string | null>(() => firstOpenId(data.exercises));
+  const [menuId, setMenuId] = React.useState<string | null>(null);
   const [filter, setFilter] = React.useState<"all" | "me" | "sam">("all");
-  const [menuOpen, setMenuOpen] = React.useState(false);
   const [addOpen, setAddOpen] = React.useState(false);
   const [finishOpen, setFinishOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -259,7 +439,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const endMs = sessionState.endedAt ? Date.parse(sessionState.endedAt) : now;
   const elapsed = Math.max(0, (endMs - Date.parse(session.startedAt)) / 1000);
 
-  const ex = exercises[current] as ExerciseState | undefined;
+  const menuEx = exercises.find((e) => e.id === menuId);
 
   // ---- row helpers ---------------------------------------------------------------------------
   function patchRow(exId: string, rowId: string, change: Partial<Row>) {
@@ -464,7 +644,18 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     };
   }, []);
 
+  function toggleOpen(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setFocusId(id);
+  }
+
   function toggleComplete(e: ExerciseState, lane: Lane, index: number) {
+    setFocusId(e.id);
     const rows = lane === "me" ? e.rows : e.partnerRows;
     const row = rows[index];
     if (row.completed) {
@@ -512,13 +703,13 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       prev.map((x) => (x.id === e.id ? { ...x, rows: x.rows.slice(0, -1), partnerRows: x.partnerRows.slice(0, x.rows.length - 1) } : x))
     );
     if (last.saved) void deleteSetAction(last.id).then((r) => r.error && setBanner(r.error));
-    setMenuOpen(false);
+    setMenuId(null);
   }
 
   function toggleSkip(e: ExerciseState) {
     const skipped = !e.skipped;
     setExercises((prev) => prev.map((x) => (x.id === e.id ? { ...x, skipped } : x)));
-    setMenuOpen(false);
+    setMenuId(null);
     void setExerciseSkippedAction(e.id, skipped).then((r) => r.error && setBanner(r.error));
   }
 
@@ -545,10 +736,9 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         partnerRows: partner ? padLane([], partner.userId, rows.length) : [],
         last: [],
       };
-      setExercises((prev) => {
-        setCurrent(prev.length);
-        return [...prev, added];
-      });
+      setExercises((prev) => [...prev, added]);
+      setExpanded((prev) => new Set(prev).add(added.id));
+      setFocusId(added.id);
       setAddOpen(false);
       setQuery("");
     });
@@ -631,7 +821,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     onResync: () => void resync(),
   });
 
-  const currentExerciseId = ex?.exercise_id ?? null;
+  const currentExerciseId = exercises.find((e) => e.id === focusId)?.exercise_id ?? null;
   const { track } = realtime;
   React.useEffect(() => {
     track(currentExerciseId);
@@ -722,15 +912,6 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         : peer
           ? `Live · You + ${partnerFirst}`
           : `${partnerFirst} · not connected`;
-  const lane = ex ? (view === "sam" ? ex.partnerRows : ex.rows) : [];
-  const laneTone: Lane = view === "sam" ? "partner" : "me";
-  const laneWho = view === "sam" ? `${partnerName}'s` : "Your";
-  const theirDone = ex ? ex.partnerRows.filter((r) => r.completed) : [];
-  const pill = !ex
-    ? ""
-    : view === "sam"
-      ? `${theirDone.length} / ${ex.partnerRows.length} sets`
-      : `${ex.rows.filter((r) => r.completed).length} / ${ex.rows.length} sets`;
 
   return (
     <div className="mx-auto w-full max-w-xl pb-28">
@@ -830,140 +1011,31 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         </div>
       ) : (
         <>
-          {/* progress strip: tap a segment to jump */}
-          <nav aria-label="Exercises" className="mb-3 flex gap-1.5">
-            {exercises.map((e, i) => {
-              const done = !e.skipped && e.rows.length > 0 && e.rows.every((r) => r.completed);
-              return (
-                <button
-                  key={e.id}
-                  type="button"
-                  onClick={() => setCurrent(i)}
-                  aria-label={`${e.name}${done ? ", done" : e.skipped ? ", skipped" : ""}`}
-                  aria-current={i === current}
-                  className="flex h-6 flex-1 items-center"
-                >
-                  <span
-                    className={cn(
-                      "h-1.5 w-full rounded-full",
-                      done ? "bg-emerald-500" : e.skipped ? "bg-zinc-800" : "bg-zinc-700",
-                      i === current && !done && "bg-emerald-500/40"
-                    )}
-                  />
-                </button>
-              );
-            })}
-          </nav>
-
-          {ex && (
-              <section aria-label={ex.name} className="rounded-[18px] border border-zinc-800 bg-zinc-900 p-3.5">
-                <div className="mb-2.5 flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                      Exercise {current + 1} of {exercises.length}
-                    </p>
-                    <h2 className="font-display text-[22px] font-bold uppercase leading-tight tracking-wide">{ex.name}</h2>
-                    {ex.last.length > 0 ? (
-                      <p className="text-xs text-zinc-400">
-                        Last time: {ex.last.map((l) => `${fmt(toPreferredWeight(l.weight_kg, unit))}×${l.reps}`).join(", ")} {unit}
-                      </p>
-                    ) : (
-                      ex.rep_min != null && (
-                        <p className="text-xs text-zinc-400">
-                          Target: {ex.target_sets} × {ex.rep_min}
-                          {ex.rep_max && ex.rep_max !== ex.rep_min ? `–${ex.rep_max}` : ""}
-                        </p>
-                      )
-                    )}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <span
-                      className={cn(
-                        "rounded-full border bg-zinc-950 px-2.5 py-0.5 font-display text-xs font-bold uppercase tracking-wider",
-                        view === "sam" ? "border-[#a8cbff] text-sky-300" : "border-emerald-500 text-emerald-400"
-                      )}
-                    >
-                      {pill}
-                    </span>
-                    <Button variant="ghost" size="icon" aria-label="Exercise options" onClick={() => setMenuOpen(true)}>
-                      <MoreHorizontal className="h-5 w-5 text-zinc-400" />
-                    </Button>
-                  </div>
-                </div>
-
-                {ex.skipped ? (
-                  <div className="space-y-2 rounded-2xl border border-dashed border-zinc-700 p-4 text-center">
-                    <p className="text-sm text-zinc-400">Skipped for today.</p>
-                    <Button variant="secondary" onClick={() => toggleSkip(ex)}>Restore exercise</Button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="mb-1 grid grid-cols-[34px_minmax(0,1fr)_minmax(0,1fr)_48px] gap-2 text-center text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
-                      <span>Set</span>
-                      <span>{unitLabel}</span>
-                      <span>Reps</span>
-                      <span />
-                    </div>
-                    <ol className="space-y-1.5">
-                      {lane.map((row, i) => (
-                        <li key={row.id}>
-                          <SetRowView
-                            row={row}
-                            label={String(i + 1)}
-                            number={i + 1}
-                            tone={laneTone}
-                            unit={unit}
-                            who={laneWho}
-                            placeholder={placeholderFor(ex, view === "sam" ? "partner" : "me", i)}
-                            isNext={!row.completed && lane.slice(0, i).every((r) => r.completed)}
-                            onField={(field, value) => patchRow(ex.id, row.id, { [field]: value, error: null })}
-                            onBlur={() => commitEdit(ex, row)}
-                            onToggle={() => toggleComplete(ex, view === "sam" ? "partner" : "me", i)}
-                          />
-                        </li>
-                      ))}
-                    </ol>
-
-                    {/* All view: your buddy's progress in one line; tap to open and correct their sets */}
-                    {view === "all" && partner && (
-                      <button
-                        type="button"
-                        onClick={() => setFilter("sam")}
-                        aria-label={`Open ${partnerName}'s sets`}
-                        className="mt-2.5 flex min-h-[44px] w-full items-center gap-2 border-t border-dashed border-zinc-800 pt-2.5 text-left text-[13px] text-zinc-400"
-                      >
-                        <span className="font-display text-sm font-bold uppercase tracking-wider text-sky-300">{partnerFirst}</span>
-                        <span className="min-w-0 flex-1 truncate tabular-nums">
-                          {theirDone.length > 0 ? theirDone.map((r) => `${r.weight}×${r.reps}`).join(" · ") : "No sets yet"}
-                        </span>
-                        <span className="shrink-0 font-semibold text-sky-300">
-                          {theirDone.length} / {ex.partnerRows.length}
-                        </span>
-                      </button>
-                    )}
-                    {view === "sam" && (
-                      <p className="mt-2 text-xs text-zinc-500">Correcting {partnerName}&rsquo;s sets. Edits are marked &ldquo;edited by you&rdquo;.</p>
-                    )}
-
-                    <Button variant="outline" className="mt-2.5 h-11 w-full border-dashed text-zinc-400" onClick={() => addSet(ex)}>
-                      <Plus className="h-4 w-4" /> Add set
-                    </Button>
-                  </>
-                )}
-              </section>
-          )}
-
-          {/* prev / next */}
-          <div className="mt-3 flex items-center justify-between gap-2">
-            <Button variant="ghost" disabled={current === 0} onClick={() => setCurrent((c) => Math.max(0, c - 1))}>
-              <ChevronLeft className="h-4 w-4" /> Prev
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
-              <Plus className="h-4 w-4" /> Exercise
-            </Button>
-            <Button variant="ghost" disabled={current >= exercises.length - 1} onClick={() => setCurrent((c) => Math.min(exercises.length - 1, c + 1))}>
-              {exercises[current + 1] ? <span className="max-w-[7rem] truncate">{exercises[current + 1].name}</span> : "Next"}
-              <ChevronRight className="h-4 w-4" />
+          <div className="space-y-3">
+            {exercises.map((e) => (
+              <ExerciseCard
+                key={e.id}
+                ex={e}
+                open={expanded.has(e.id)}
+                view={view}
+                unit={unit}
+                unitLabel={unitLabel}
+                hasBuddy={Boolean(partner)}
+                partnerName={partnerName}
+                partnerFirst={partnerFirst}
+                placeholderFor={(lane, index) => placeholderFor(e, lane, index)}
+                onToggle={() => toggleOpen(e.id)}
+                onMenu={() => setMenuId(e.id)}
+                onField={(rowId, field, value) => patchRow(e.id, rowId, { [field]: value, error: null })}
+                onBlurRow={(row) => commitEdit(e, row)}
+                onToggleRow={(lane, index) => toggleComplete(e, lane, index)}
+                onOpenBuddy={() => setFilter("sam")}
+                onAddSet={() => addSet(e)}
+                onRestore={() => toggleSkip(e)}
+              />
+            ))}
+            <Button variant="outline" className="h-12 w-full border-dashed text-zinc-400" onClick={() => setAddOpen(true)}>
+              <Plus className="h-4 w-4" /> Add exercise
             </Button>
           </div>
         </>
@@ -976,13 +1048,13 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       )}
 
       {/* exercise menu */}
-      <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} title={ex?.name ?? "Exercise"}>
-        {ex && (
+      <Sheet open={menuId !== null} onClose={() => setMenuId(null)} title={menuEx?.name ?? "Exercise"}>
+        {menuEx && (
           <div className="space-y-2 pt-2">
-            <Button variant="secondary" className="w-full justify-start" onClick={() => toggleSkip(ex)}>
-              {ex.skipped ? "Restore exercise" : "Skip this exercise"}
+            <Button variant="secondary" className="w-full justify-start" onClick={() => toggleSkip(menuEx)}>
+              {menuEx.skipped ? "Restore exercise" : "Skip this exercise"}
             </Button>
-            <Button variant="secondary" className="w-full justify-start" disabled={ex.rows.length <= 1} onClick={() => removeLastSet(ex)}>
+            <Button variant="secondary" className="w-full justify-start" disabled={menuEx.rows.length <= 1} onClick={() => removeLastSet(menuEx)}>
               Remove last set
             </Button>
           </div>
