@@ -1,26 +1,179 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * Iron Black design system.
+ *
+ * The app is styled with Tailwind's `zinc-*` (neutrals) and `emerald-*` (brand accent)
+ * utilities. Instead of rewriting every class, we re-point those palette variables at a
+ * theme chosen by two attributes on <html>:
+ *   data-mode   = "dark" | "light"   (resolved from the user's Dark / Light / System choice)
+ *   data-accent = lime | peach | sky | rose | mint | butter
+ * Both are set before first paint by <ThemeScript /> and kept in sync by <ThemeSync />.
+ *
+ * Semantics of the remapped scale (same in both modes, so existing classes keep working):
+ *   zinc-950 app ground · zinc-900 raised surface · zinc-800 hairlines
+ *   zinc-500…50 text from muted to highest contrast
+ *   emerald-500/600 accent fill · emerald-400/300 accent used as text/icon on the ground
+ *   accent-ink = text drawn on top of an accent fill
+ */
+
+@custom-variant dark (&:where([data-mode="dark"], [data-mode="dark"] *));
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--color-zinc-950);
+  --color-foreground: var(--color-zinc-50);
+  --color-accent-ink: var(--accent-ink);
+  --font-sans: var(--font-barlow);
+  --font-display: var(--font-barlow-condensed);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/*
+ * Accent palettes. Per accent:
+ *   --accent             pastel fill (buttons, active states)
+ *   --accent-text-light  deeper shade of the accent for text/icons on light grounds
+ *   --g-*                near-black dark-mode ground / surface / hairline
+ *   --l-ground           pastel light-mode ground (cards stay white)
+ */
+html,
+html[data-accent="lime"] {
+  --accent: #d4f28a;
+  --accent-text-light: #4d6a00;
+  --g-bg: #0b0b0c;
+  --g-surface: #161618;
+  --g-line: #2c2c31;
+  --l-ground: #f3fadb;
+}
+html[data-accent="peach"] {
+  --accent: #ffb88c;
+  --accent-text-light: #b33f00;
+  --g-bg: #0c0a09;
+  --g-surface: #181513;
+  --g-line: #2e2925;
+  --l-ground: #fff0e6;
+}
+html[data-accent="sky"] {
+  --accent: #a8cbff;
+  --accent-text-light: #1d5fd1;
+  --g-bg: #080a10;
+  --g-surface: #12151d;
+  --g-line: #232938;
+  --l-ground: #eaf2ff;
+}
+html[data-accent="rose"] {
+  --accent: #ffb3bb;
+  --accent-text-light: #c4152b;
+  --g-bg: #0c0809;
+  --g-surface: #181012;
+  --g-line: #2e2023;
+  --l-ground: #ffebee;
+}
+html[data-accent="mint"] {
+  --accent: #9af0d5;
+  --accent-text-light: #00775b;
+  --g-bg: #070f0d;
+  --g-surface: #101a17;
+  --g-line: #1f2f2a;
+  --l-ground: #e6faf3;
+}
+html[data-accent="butter"] {
+  --accent: #ffe08a;
+  --accent-text-light: #8a6100;
+  --g-bg: #0c0b08;
+  --g-surface: #171510;
+  --g-line: #2d2a1e;
+  --l-ground: #fff7db;
+}
+html {
+  --accent-ink: #1e1e22;
+}
+
+/* ---------- Dark mode (default) ---------- */
+html,
+html[data-mode="dark"] {
+  color-scheme: dark;
+  --color-zinc-950: var(--g-bg);
+  --color-zinc-900: var(--g-surface);
+  --color-zinc-800: var(--g-line);
+  --color-zinc-700: color-mix(in oklab, var(--g-line) 85%, white);
+  --color-zinc-600: #5f5f68;
+  --color-zinc-500: #8e8e97;
+  --color-zinc-400: #a5a5ad;
+  --color-zinc-300: #c4c4ca;
+  --color-zinc-200: #dcdce0;
+  --color-zinc-100: #ededf0;
+  --color-zinc-50: #f6f6f2;
+  --accent-text: var(--accent);
+}
+
+/* ---------- Light mode (pastel) ---------- */
+html[data-mode="light"] {
+  color-scheme: light;
+  --color-zinc-950: var(--l-ground);
+  --color-zinc-900: #ffffff;
+  --color-zinc-800: color-mix(in oklab, var(--accent) 45%, #e6e6dd);
+  --color-zinc-700: color-mix(in oklab, var(--accent) 55%, #cfcfc4);
+  --color-zinc-600: #a0a097;
+  --color-zinc-500: #74747c;
+  --color-zinc-400: #55555d;
+  --color-zinc-300: #3a3a41;
+  --color-zinc-200: #26262b;
+  --color-zinc-100: #17171b;
+  --color-zinc-50: #1e1e22;
+  --accent-text: var(--accent-text-light);
+  /* Status colors need darker shades to stay legible on a light ground */
+  --color-red-300: #b91c1c;
+  --color-red-400: #c81e1e;
+  --color-amber-300: #92400e;
+  --color-amber-400: #a05a00;
+  --color-blue-300: #1d4ed8;
+  --color-blue-400: #1d4ed8;
+  --color-purple-400: #7e22ce;
+  --color-cyan-400: #0e7490;
+  --color-rose-400: #be123c;
+  --color-indigo-400: #4338ca;
+}
+
+/* ---------- Accent -> emerald utilities ---------- */
+html {
+  --color-emerald-300: var(--accent-text);
+  --color-emerald-400: var(--accent-text);
+  --color-emerald-500: var(--accent);
+  --color-emerald-600: color-mix(in oklab, var(--accent) 88%, black);
+  --color-emerald-700: color-mix(in oklab, var(--accent) 70%, black);
+}
+
+/* ---------- Base ---------- */
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--color-zinc-950);
+    color: var(--color-zinc-50);
+    font-family: var(--font-barlow), system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    overscroll-behavior-y: none;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-barlow-condensed), system-ui, sans-serif;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Safe-area helpers for the iOS home-screen (standalone) app */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
 }

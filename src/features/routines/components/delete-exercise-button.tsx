@@ -57,7 +57,7 @@ export function DeleteExerciseButton({
         </div>
 
         <p className="text-xs text-zinc-300">
-          Are you sure you want to delete <span className="font-semibold text-white">&quot;{exercise.name}&quot;</span>?
+          Are you sure you want to delete <span className="font-semibold text-zinc-50">&quot;{exercise.name}&quot;</span>?
           This action cannot be undone.
         </p>
 

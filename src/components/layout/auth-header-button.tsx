@@ -39,7 +39,7 @@ export function AuthHeaderButton() {
     return (
       <Link
         href="/login"
-        className="rounded bg-emerald-500 px-3 py-1.5 font-medium text-zinc-950 hover:bg-emerald-400 transition-colors"
+        className="rounded bg-emerald-500 px-3 py-1.5 font-medium text-accent-ink hover:bg-emerald-400 transition-colors"
       >
         Sign In
       </Link>

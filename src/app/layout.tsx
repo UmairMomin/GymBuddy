@@ -1,20 +1,24 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Barlow, Barlow_Condensed } from "next/font/google";
 import Link from "next/link";
 import { Suspense } from "react";
 import { MobileNavigation } from "@/components/layout/mobile-navigation";
+import { DesktopNavigation } from "@/components/layout/desktop-navigation";
 import { AuthHeaderButton } from "@/components/layout/auth-header-button";
 import { NetworkStatusIndicator } from "@/components/layout/network-status-indicator";
+import { ThemeScript, ThemeSync } from "@/components/layout/theme-script";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const barlow = Barlow({
+  variable: "--font-barlow",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const barlowCondensed = Barlow_Condensed({
+  variable: "--font-barlow-condensed",
   subsets: ["latin"],
+  weight: ["600", "700", "800"],
 });
 
 export const metadata: Metadata = {
@@ -35,7 +39,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#09090b",
+  themeColor: "#0b0b0c",
 };
 
 export default function RootLayout({
@@ -44,38 +48,41 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" data-mode="dark" data-accent="lime" suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-zinc-950 text-zinc-50 pb-20 selection:bg-zinc-800`}
+        className={`${barlow.variable} ${barlowCondensed.variable} min-h-screen bg-zinc-950 text-zinc-50 antialiased selection:bg-emerald-500 selection:text-accent-ink`}
       >
+        <ThemeSync />
         <NetworkStatusIndicator />
-        <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-4 pb-20 md:pb-8">
-          <header className="flex items-center justify-between border-b border-zinc-800 pb-3">
-            <div className="flex items-center space-x-6">
-              <Link href="/" className="text-lg font-bold tracking-tight hover:text-emerald-400 transition-colors">
-                GYM TRACKER
-              </Link>
-              {/* Desktop Navigation Links */}
-              <nav className="hidden md:flex items-center space-x-4 text-sm font-medium">
-                <Link href="/" className="text-zinc-200 hover:text-white transition-colors">Workout</Link>
-                <Link href="/routines" className="text-zinc-400 hover:text-white transition-colors">Routines</Link>
-                <Link href="/exercises" className="text-zinc-400 hover:text-white transition-colors">Exercises</Link>
-                <Link href="/group" className="text-zinc-400 hover:text-white transition-colors">Group</Link>
-                <Link href="/analytics" className="text-zinc-400 hover:text-white transition-colors">Analytics</Link>
-                <Link href="/settings" className="text-zinc-400 hover:text-white transition-colors">Settings</Link>
-              </nav>
-            </div>
-            <div className="flex items-center space-x-3 text-xs">
-              <Suspense fallback={<div className="h-7 w-16 animate-pulse rounded bg-zinc-800" />}>
-                <AuthHeaderButton />
-              </Suspense>
-            </div>
-          </header>
-          <main className="flex-1 py-6">{children}</main>
+        <div className="pt-safe">
+          <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 pt-3 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-8">
+            <header className="flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-6">
+                <Link
+                  href="/"
+                  className="font-display text-2xl font-extrabold uppercase leading-none tracking-wide transition-colors hover:text-emerald-400"
+                >
+                  Gym<span className="text-emerald-400">Tracker</span>
+                </Link>
+                <Suspense fallback={null}>
+                  <DesktopNavigation />
+                </Suspense>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <Suspense fallback={<div className="h-9 w-16 animate-pulse rounded-md bg-zinc-800" />}>
+                  <AuthHeaderButton />
+                </Suspense>
+              </div>
+            </header>
+            <main className="flex-1 py-5 md:py-6">{children}</main>
+          </div>
         </div>
-        {/* Mobile Navigation (Hidden on md/desktop screens) */}
+        {/* Mobile Navigation (hidden on md/desktop) */}
         <div className="md:hidden">
-          <Suspense fallback={<div className="h-14 bg-zinc-950 border-t border-zinc-800" />}>
+          <Suspense fallback={<div className="fixed inset-x-0 bottom-0 h-16 border-t border-zinc-800 bg-zinc-950" />}>
             <MobileNavigation />
           </Suspense>
         </div>

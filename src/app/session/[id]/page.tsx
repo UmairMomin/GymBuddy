@@ -25,7 +25,7 @@ async function SessionContent({ sessionId }: { sessionId: string }) {
           Please sign in to log workouts with your training group.
         </p>
         <Link href="/login">
-          <Button className="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold">
+          <Button className="bg-emerald-500 hover:bg-emerald-600 text-accent-ink font-semibold">
             Sign In to Continue
           </Button>
         </Link>

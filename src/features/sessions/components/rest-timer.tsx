@@ -53,65 +53,79 @@ export function RestTimer() {
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
+  const active = secondsLeft !== null;
+  const done = secondsLeft === 0;
+  const progress = active && selectedDuration > 0 ? Math.max(0, secondsLeft / selectedDuration) : 0;
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-900/80 p-3 text-xs">
+    <div
+      className={`rounded-2xl border p-2 transition-colors ${
+        active && !done ? "border-emerald-500/50 bg-emerald-500/10" : "border-zinc-800 bg-zinc-950/60"
+      }`}
+    >
       <div className="flex items-center gap-2">
-        <Timer className="h-4 w-4 text-emerald-400" />
-        <span className="font-semibold text-zinc-200">Rest Timer:</span>
-        {secondsLeft !== null ? (
-          <span
-            className={`font-mono text-sm font-bold ${
-              secondsLeft === 0
-                ? "text-red-400 animate-bounce"
-                : "text-emerald-400"
-            }`}
-          >
-            {formatTime(secondsLeft)}
-          </span>
-        ) : (
-          <span className="text-zinc-500 italic">Off</span>
-        )}
+        <Timer className="ml-1 h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
+        <span
+          className={`w-[4.25rem] shrink-0 font-display text-3xl font-extrabold leading-none tabular-nums ${
+            done ? "animate-pulse text-red-400" : active ? "text-emerald-400" : "text-zinc-600"
+          }`}
+        >
+          {active ? formatTime(secondsLeft) : "0:00"}
+        </span>
+
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+          {[60, 90, 120]
+            .filter((d) => !active || d === selectedDuration)
+            .map((duration) => (
+              <button
+                key={duration}
+                type="button"
+                onClick={() => startTimer(duration)}
+                aria-label={`Start ${duration} second rest`}
+                className={`min-h-[44px] min-w-[44px] flex-1 rounded-xl font-display text-lg font-bold transition-colors active:scale-95 ${
+                  active && selectedDuration === duration
+                    ? "bg-emerald-500 text-accent-ink"
+                    : "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+                }`}
+              >
+                {duration}s
+              </button>
+            ))}
+
+          {active && (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                onClick={toggleRunning}
+                aria-label={isRunning ? "Pause rest timer" : "Resume rest timer"}
+                disabled={done}
+              >
+                {isRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="icon"
+                onClick={resetTimer}
+                aria-label="Reset rest timer"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="flex items-center gap-1.5">
-        {[60, 90, 120].map((duration) => (
-          <button
-            key={duration}
-            type="button"
-            onClick={() => startTimer(duration)}
-            className={`rounded px-2 py-1 font-mono text-[11px] font-medium transition-colors ${
-              secondsLeft !== null && selectedDuration === duration
-                ? "bg-emerald-500 text-zinc-950 font-bold"
-                : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-            }`}
-          >
-            {duration}s
-          </button>
-        ))}
-
-        {secondsLeft !== null && (
-          <div className="flex items-center gap-1 ml-1 pl-1 border-l border-zinc-700">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={toggleRunning}
-              className="h-7 w-7 text-zinc-300 hover:text-white"
-            >
-              {isRunning ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={resetTimer}
-              className="h-7 w-7 text-zinc-400 hover:text-zinc-200"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
-      </div>
+      {active && (
+        <div className="mx-1 mt-2 h-1 overflow-hidden rounded-full bg-zinc-800" aria-hidden>
+          <div
+            className="h-full rounded-full bg-emerald-500 transition-[width] duration-1000 ease-linear"
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }

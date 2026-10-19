@@ -88,7 +88,7 @@ export function AuthForm() {
 
           <Button
             type="submit"
-            className="w-full bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold h-11"
+            className="w-full bg-emerald-500 hover:bg-emerald-600 text-accent-ink font-bold h-11"
             disabled={loading}
           >
             {loading ? (

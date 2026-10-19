@@ -2,16 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Dumbbell, Calendar, BarChart3, Users, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const NAV_ITEMS = [
-  { label: "Workout", href: "/", icon: Dumbbell },
-  { label: "Routines", href: "/routines", icon: Calendar },
-  { label: "Group", href: "/group", icon: Users },
-  { label: "Analytics", href: "/analytics", icon: BarChart3 },
-  { label: "Settings", href: "/settings", icon: Settings },
-];
+import { NAV_ITEMS, isNavActive } from "@/components/layout/nav-items";
 
 export function MobileNavigation() {
   const pathname = usePathname();
@@ -19,24 +11,26 @@ export function MobileNavigation() {
   return (
     <nav
       aria-label="Bottom Navigation"
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-zinc-200 bg-white/95 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/95"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-zinc-800 bg-zinc-950/95 pb-safe backdrop-blur-md"
     >
-      <div className="mx-auto flex max-w-md items-center justify-around px-2 py-1">
+      <div className="mx-auto flex max-w-lg items-stretch px-2 pt-1.5 pb-1">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive = isNavActive(pathname, item);
           return (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex min-h-[48px] min-w-[48px] flex-col items-center justify-center rounded-lg px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 dark:focus-visible:ring-zinc-300",
-                isActive
-                  ? "text-zinc-900 font-semibold dark:text-zinc-50"
-                  : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+                "relative flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 active:scale-95",
+                isActive ? "text-emerald-400" : "text-zinc-500 hover:text-zinc-50"
               )}
             >
-              <Icon className={cn("h-5 w-5 mb-0.5", isActive ? "stroke-[2.25]" : "stroke-2")} />
+              {isActive && (
+                <span aria-hidden className="absolute -top-1.5 h-0.5 w-8 rounded-full bg-emerald-500" />
+              )}
+              <Icon className={cn("h-[22px] w-[22px]", isActive ? "stroke-[2.4]" : "stroke-2")} />
               <span>{item.label}</span>
             </Link>
           );

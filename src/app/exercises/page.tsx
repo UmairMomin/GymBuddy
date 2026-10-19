@@ -23,7 +23,7 @@ async function ExercisesContent() {
           Please sign in to view and customize exercises for your training group.
         </p>
         <Link href="/login">
-          <Button className="bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-semibold">
+          <Button className="bg-emerald-500 hover:bg-emerald-600 text-accent-ink font-semibold">
             Sign In to Continue
           </Button>
         </Link>
