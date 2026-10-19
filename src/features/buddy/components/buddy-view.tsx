@@ -202,7 +202,7 @@ export function BuddyView({ overview }: { overview: BuddyOverview }) {
               <div key={s.id} className="flex items-center justify-between rounded-2xl bg-zinc-900 p-3">
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{s.name}</p>
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-xs text-zinc-400" suppressHydrationWarning>
                     {new Date(s.startedAt).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                   </p>
                 </div>

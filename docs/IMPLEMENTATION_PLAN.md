@@ -256,13 +256,17 @@ Authority: [V2_PRODUCT_DIRECTION.md](V2_PRODUCT_DIRECTION.md). Milestones 0–14
 - **Verification**: ESLint clean on `src/features/plan`, `src/features/buddy`, `src/components`, `src/app`; no type errors in M17 files (total errors 63 → 56, remaining ones are the unreferenced V1 modules `sessions`, `scheduling`, `analytics`). UI checked at 375px in the browser pane with a temporary mock-data fixture (removed): routines list, builder, day-conflict warning, exercise picker. Migrations `20261020000001`, `20261020000002` applied to Supabase Cloud.
 
 ## Milestone 18: Today + Solo Workout Engine
-- **Status**: NOT STARTED
+- **Status**: COMPLETED (signed-in flow with a real account not yet exercised)
 - **Objective**: Home screen and the fast logging flow, solo first.
 - **Acceptance Criteria**:
-  - [ ] Today screen: scheduled routine, exercise preview, Start/Resume, week strip, recent sessions.
-  - [ ] Active workout per design: last-time values as **placeholders**, one-tap confirm, auto rest timer, add/skip exercise mid-workout, finish.
-  - [ ] Idempotent writes with stable set IDs and `revision_number`.
-  - [ ] Bottom nav is the four V2 tabs.
+  - [x] **Today** (`/`): today's scheduled routine (device weekday) with exercise preview, Start / Resume, Change-routine sheet (incl. Freestyle), week strip, recent sessions; rest-day state; no-routines state linking to Plan.
+  - [x] **Workout** (`/session/[id]`): one exercise in focus with progress strip, prev/next, add exercise, skip/restore, remove last set; last-time values shown as **placeholders** (a confirm tap accepts them); one-tap ✓ logs and starts the rest timer; ✓ again undoes; kg/lb per profile; finish sheet (time / sets / volume) with Finish or Discard; completed sessions stay editable.
+  - [x] Writes are idempotent (client-generated set ids) with compare-and-swap on `revision_number`; a stale write returns the winning values; writes per set are queued so fast taps can't race.
+  - [x] Bottom nav is Today / Plan / History / Buddy (History still points at the `/analytics` stub until M20).
+  - [x] V1 `sessions` and `scheduling` code deleted.
+  - [ ] Manual check with a real account on a phone. Not done by the agent.
+- **Out of scope (by design)**: "Train with buddy" toggle and invite UI (M19); rest timer is local-only until M19 shares it.
+- **Verification**: ESLint clean across `src`; type-check has 1 remaining error, in V1 `src/features/analytics/actions.ts` (replaced in M20); DB flow test `supabase/tests/workout_flow.sql` passes (start from routine, idempotent start, one live session per host, duplicate set id rejected, stale revision write rejected, edit after finish, discard). UI checked at 375px in the browser pane with a temporary mock-data fixture (removed): Today (incl. weekday highlight), workout screen, placeholder-accept ✓, rest timer dock. Found and fixed a hydration mismatch on the elapsed clock and a pre-hydration "Rest day" flash.
 
 ## Milestone 19: Live Buddy Sessions
 - **Status**: NOT STARTED

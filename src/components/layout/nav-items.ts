@@ -4,10 +4,11 @@ export type NavItem = { label: string; href: string; icon: LucideIcon; match?: s
 
 /** Primary navigation, shared by the mobile bottom bar and the desktop header. Settings lives in the profile menu. */
 export const NAV_ITEMS: NavItem[] = [
-  { label: "Workout", href: "/", icon: Dumbbell, match: ["/session"] },
+  { label: "Today", href: "/", icon: Dumbbell, match: ["/session"] },
   { label: "Plan", href: "/plan", icon: Calendar },
+  // The route is renamed to /history in Milestone 20 when analytics merge into it.
+  { label: "History", href: "/analytics", icon: BarChart3 },
   { label: "Buddy", href: "/buddy", icon: Users },
-  { label: "Analytics", href: "/analytics", icon: BarChart3 },
 ];
 
 export function isNavActive(pathname: string, item: NavItem): boolean {
