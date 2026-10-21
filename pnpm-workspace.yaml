@@ -1,0 +1,5 @@
+# pnpm 11 fails the install when a dependency has an install script it hasn't been told about.
+# unrs-resolver (used by ESLint's import resolver) only has an optional post-install; it ships
+# prebuilt binaries, so its script does not need to run.
+allowBuilds:
+  unrs-resolver: false
