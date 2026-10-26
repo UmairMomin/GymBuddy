@@ -16,7 +16,8 @@ import {
   getSessionSyncAction,
   inviteBuddyAction,
   saveSetAction,
-  setExerciseSkippedAction,
+  removeExerciseFromWorkoutAction,
+  swapExerciseInWorkoutAction,
   type RosterEntry,
   type SaveSetResult,
   type SessionExerciseView,
@@ -158,6 +159,13 @@ function SetRowView({
             value={row[field]}
             placeholder={field === "weight" ? placeholder.weight : placeholder.reps}
             onChange={(e) => onField(field, e.target.value)}
+            onKeyDown={(e) => {
+              // Desktop shortcut: Space in an empty field accepts the grey "last time" value. Never types a space.
+              if (e.key !== " ") return;
+              e.preventDefault();
+              const ph = field === "weight" ? placeholder.weight : placeholder.reps;
+              if (row[field] === "" && ph) onField(field, ph);
+            }}
             onBlur={onBlur}
             className={cn(
               "h-[46px] w-full min-w-0 rounded-xl border text-center font-display text-2xl font-bold tabular-nums placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2",
@@ -219,7 +227,6 @@ function ExerciseCard({
   onToggleRow,
   onOpenBuddy,
   onAddSet,
-  onRestore,
 }: {
   ex: ExerciseState;
   open: boolean;
@@ -237,7 +244,6 @@ function ExerciseCard({
   onToggleRow: (lane: Lane, index: number) => void;
   onOpenBuddy: () => void;
   onAddSet: () => void;
-  onRestore: () => void;
 }) {
   const mineDone = ex.rows.filter((r) => r.completed).length;
   const theirDone = ex.partnerRows.filter((r) => r.completed);
@@ -247,8 +253,8 @@ function ExerciseCard({
     const parts = [
       `${ex.target_sets} sets`,
       reps ? `${reps} reps` : "",
-      ex.skipped ? "skipped" : `you ${mineDone}/${ex.rows.length}`,
-      hasBuddy && !ex.skipped ? `${partnerFirst} ${theirDone.length}/${ex.partnerRows.length}` : "",
+      `you ${mineDone}/${ex.rows.length}`,
+      hasBuddy ? `${partnerFirst} ${theirDone.length}/${ex.partnerRows.length}` : "",
     ].filter(Boolean);
     return (
       <section aria-label={ex.name}>
@@ -305,12 +311,6 @@ function ExerciseCard({
         </div>
       </div>
 
-      {ex.skipped ? (
-        <div className="space-y-2 rounded-2xl border border-dashed border-zinc-700 p-4 text-center">
-          <p className="text-sm text-zinc-400">Skipped for today.</p>
-          <Button variant="secondary" onClick={onRestore}>Restore exercise</Button>
-        </div>
-      ) : (
         <>
           <div className="mb-1 grid grid-cols-[34px_minmax(0,1fr)_minmax(0,1fr)_48px] gap-2 text-center text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
             <span>Set</span>
@@ -363,14 +363,13 @@ function ExerciseCard({
             <Plus className="h-4 w-4" /> Add set
           </Button>
         </>
-      )}
     </section>
   );
 }
 
 /** First exercise that still has sets to log (the one to start open); falls back to the first. */
 function firstOpenId(list: SessionExerciseView[]): string | null {
-  const next = list.find((e) => !e.skipped && e.sets.filter((s) => s.completed).length < e.target_sets) ?? list[0];
+  const next = list.find((e) => e.sets.filter((s) => s.completed).length < e.target_sets) ?? list[0];
   return next?.id ?? null;
 }
 
@@ -421,6 +420,10 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const [menuId, setMenuId] = React.useState<string | null>(null);
   const [filter, setFilter] = React.useState<"all" | "me" | "sam">("all");
   const [addOpen, setAddOpen] = React.useState(false);
+  /** Exercise being replaced while the picker is open (null = the picker adds). */
+  const [swapId, setSwapId] = React.useState<string | null>(null);
+  /** Pending destructive change on an exercise that has logged sets; newId set = swap, else remove. */
+  const [pendingChange, setPendingChange] = React.useState<{ ex: ExerciseState; newId?: string } | null>(null);
   const [finishOpen, setFinishOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [banner, setBanner] = React.useState<string | null>(null);
@@ -441,6 +444,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const elapsed = Math.max(0, (endMs - Date.parse(session.startedAt)) / 1000);
 
   const menuEx = exercises.find((e) => e.id === menuId);
+  const swapEx = exercises.find((e) => e.id === swapId);
 
   // ---- row helpers ---------------------------------------------------------------------------
   function patchRow(exId: string, rowId: string, change: Partial<Row>) {
@@ -707,11 +711,59 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     setMenuId(null);
   }
 
-  function toggleSkip(e: ExerciseState) {
-    const skipped = !e.skipped;
-    setExercises((prev) => prev.map((x) => (x.id === e.id ? { ...x, skipped } : x)));
-    setMenuId(null);
-    void setExerciseSkippedAction(e.id, skipped).then((r) => r.error && setBanner(r.error));
+  /** Drop queued offline writes for an exercise so they can't re-create sets we just deleted. */
+  function purgeOutbox(exerciseId: string) {
+    writeQueue(readQueue().filter((q) => q.exercise_id !== exerciseId));
+  }
+
+  function removeExercise(e: ExerciseState) {
+    startTransition(async () => {
+      const res = await removeExerciseFromWorkoutAction(e.id);
+      if (res.error) {
+        setBanner(res.error);
+        return;
+      }
+      purgeOutbox(e.exercise_id);
+      setExercises((prev) => prev.filter((x) => x.id !== e.id));
+      setPendingChange(null);
+      setMenuId(null);
+    });
+  }
+
+  function swapExercise(e: ExerciseState, newExerciseId: string) {
+    startTransition(async () => {
+      const res = await swapExerciseInWorkoutAction(e.id, newExerciseId);
+      if (res.error || !res.data) {
+        setBanner(res.error ?? "Couldn't swap that exercise");
+        return;
+      }
+      purgeOutbox(e.exercise_id);
+      const meta = data.catalog.find((c) => c.id === newExerciseId);
+      const rows = padLane([], userId, e.target_sets);
+      const swapped: ExerciseState = {
+        ...e,
+        exercise_id: newExerciseId,
+        name: meta?.name ?? "Exercise",
+        category: meta?.category ?? "other",
+        rows,
+        partnerRows: partner ? padLane([], partner.userId, rows.length) : [],
+        last: res.data.last,
+      };
+      setExercises((prev) => prev.map((x) => (x.id === e.id ? swapped : x)));
+      setFocusId(e.id);
+      setPendingChange(null);
+      setSwapId(null);
+      setAddOpen(false);
+      setQuery("");
+    });
+  }
+
+  /** Picker choice: add a new exercise, or swap the one being replaced (confirming first if it has logged sets). */
+  function pickExercise(exerciseId: string) {
+    const target = swapEx;
+    if (!target) return addExercise(exerciseId);
+    if (target.rows.some((r) => r.saved)) setPendingChange({ ex: target, newId: exerciseId });
+    else swapExercise(target, exerciseId);
   }
 
   function addExercise(exerciseId: string) {
@@ -732,7 +784,6 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         target_sets: 3,
         rep_min: null,
         rep_max: null,
-        skipped: false,
         rows,
         partnerRows: partner ? padLane([], partner.userId, rows.length) : [],
         last: [],
@@ -1032,7 +1083,6 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
                 onToggleRow={(lane, index) => toggleComplete(e, lane, index)}
                 onOpenBuddy={() => setFilter("sam")}
                 onAddSet={() => addSet(e)}
-                onRestore={() => toggleSkip(e)}
               />
             ))}
             <Button variant="outline" className="h-12 w-full border-dashed text-zinc-400" onClick={() => setAddOpen(true)}>
@@ -1052,18 +1102,40 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       <Sheet open={menuId !== null} onClose={() => setMenuId(null)} title={menuEx?.name ?? "Exercise"}>
         {menuEx && (
           <div className="space-y-2 pt-2">
-            <Button variant="secondary" className="w-full justify-start" onClick={() => toggleSkip(menuEx)}>
-              {menuEx.skipped ? "Restore exercise" : "Skip this exercise"}
+            <Button
+              variant="secondary"
+              className="w-full justify-start"
+              onClick={() => {
+                setMenuId(null);
+                setSwapId(menuEx.id);
+                setAddOpen(true);
+              }}
+            >
+              Swap exercise
             </Button>
             <Button variant="secondary" className="w-full justify-start" disabled={menuEx.rows.length <= 1} onClick={() => removeLastSet(menuEx)}>
               Remove last set
+            </Button>
+            <Button
+              variant="secondary"
+              className="w-full justify-start text-red-400"
+              onClick={() => (menuEx.rows.some((r) => r.saved) ? setPendingChange({ ex: menuEx }) : removeExercise(menuEx))}
+            >
+              Remove exercise
             </Button>
           </div>
         )}
       </Sheet>
 
       {/* add exercise */}
-      <Sheet open={addOpen} onClose={() => setAddOpen(false)} title="Add exercise">
+      <Sheet
+        open={addOpen}
+        onClose={() => {
+          setAddOpen(false);
+          setSwapId(null);
+        }}
+        title={swapEx ? `Swap ${swapEx.name}` : "Add exercise"}
+      >
         <div className="space-y-3 pt-2">
           <div className="relative">
             <Search aria-hidden className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-zinc-500" />
@@ -1076,7 +1148,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => addExercise(c.id)}
+                  onClick={() => pickExercise(c.id)}
                   className="flex min-h-[52px] w-full items-center justify-between rounded-xl bg-zinc-900 px-3 text-left hover:bg-zinc-800"
                 >
                   <span className="text-sm font-semibold">{c.name}</span>
@@ -1087,6 +1159,31 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
             {pickable.length === 0 && <li className="p-4 text-center text-sm text-zinc-400">No matching exercises.</li>}
           </ul>
         </div>
+      </Sheet>
+
+      {/* confirm removing/swapping an exercise that has logged sets */}
+      <Sheet
+        open={pendingChange !== null}
+        onClose={() => setPendingChange(null)}
+        title={pendingChange?.newId ? "Swap exercise?" : "Remove exercise?"}
+        footer={
+          pendingChange && (
+            <Button
+              variant="ghost"
+              className="w-full text-red-400"
+              disabled={busy}
+              onClick={() => (pendingChange.newId ? swapExercise(pendingChange.ex, pendingChange.newId) : removeExercise(pendingChange.ex))}
+            >
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />} {pendingChange.newId ? "Swap and delete sets" : "Delete exercise"}
+            </Button>
+          )
+        }
+      >
+        {pendingChange && (
+          <p className="pt-2 text-sm text-zinc-300">
+            Delete {pendingChange.ex.name} and its {pendingChange.ex.rows.filter((r) => r.saved).length} logged sets? This can&rsquo;t be undone.
+          </p>
+        )}
       </Sheet>
 
       {/* finish */}
@@ -1127,7 +1224,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         {session.isHost && partner && (
           <p className="mt-3 text-sm text-zinc-400">This ends the workout for {partnerName} too. Their logged sets are kept.</p>
         )}
-        {exercises.some((e) => !e.skipped && e.rows.some((r) => !r.completed)) && (
+        {exercises.some((e) => e.rows.some((r) => !r.completed)) && (
           <p className="mt-3 text-sm text-amber-400">Some sets aren&rsquo;t logged yet. They won&rsquo;t be saved.</p>
         )}
       </Sheet>

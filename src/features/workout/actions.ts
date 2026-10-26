@@ -61,7 +61,6 @@ export type SessionExerciseView = {
   target_sets: number;
   rep_min: number | null;
   rep_max: number | null;
-  skipped: boolean;
   sets: SetRow[];
   last: LastTimeSet[];
 };
@@ -250,6 +249,31 @@ export async function startWorkoutAction(
   return { data: { id: sessionId } };
 }
 
+/** "Last time": my completed sets from the most recent earlier session that included each exercise. */
+async function loadLastTime(supabase: Supa, userId: string, sessionId: string, exerciseIds: string[]) {
+  const lastByExercise = new Map<string, LastTimeSet[]>();
+  if (exerciseIds.length === 0) return lastByExercise;
+  const { data: history } = await supabase
+    .from("workout_sets")
+    .select("exercise_id, session_id, set_order, weight_kg, reps, updated_at")
+    .eq("user_id", userId)
+    .eq("completed", true)
+    .neq("session_id", sessionId)
+    .in("exercise_id", exerciseIds)
+    .order("updated_at", { ascending: false })
+    .limit(400);
+  const latestSession = new Map<string, string>();
+  for (const h of history ?? []) {
+    if (!latestSession.has(h.exercise_id)) latestSession.set(h.exercise_id, h.session_id);
+    if (latestSession.get(h.exercise_id) !== h.session_id) continue;
+    const arr = lastByExercise.get(h.exercise_id) ?? [];
+    arr.push({ set_order: h.set_order, weight_kg: h.weight_kg, reps: h.reps });
+    lastByExercise.set(h.exercise_id, arr);
+  }
+  for (const arr of lastByExercise.values()) arr.sort((a, b) => a.set_order - b.set_order);
+  return lastByExercise;
+}
+
 export async function getWorkoutAction(sessionId: string): Promise<ActionResult<WorkoutData>> {
   if (!idSchema.safeParse(sessionId).success) return { error: "Workout not found" };
 
@@ -265,7 +289,7 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
       .maybeSingle(),
     supabase
       .from("session_exercises")
-      .select("id, exercise_id, position, target_sets, rep_min, rep_max, skipped, exercises(name, category)")
+      .select("id, exercise_id, position, target_sets, rep_min, rep_max, exercises(name, category)")
       .eq("session_id", sessionId)
       .eq("user_id", user.id)
       .order("position", { ascending: true }),
@@ -297,28 +321,7 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
   const list = listRes.data ?? [];
   const exerciseIds = list.map((l) => l.exercise_id);
 
-  // "Last time": my completed sets from the most recent earlier session that included each exercise.
-  const lastByExercise = new Map<string, LastTimeSet[]>();
-  if (exerciseIds.length > 0) {
-    const { data: history } = await supabase
-      .from("workout_sets")
-      .select("exercise_id, session_id, set_order, weight_kg, reps, updated_at")
-      .eq("user_id", user.id)
-      .eq("completed", true)
-      .neq("session_id", sessionId)
-      .in("exercise_id", exerciseIds)
-      .order("updated_at", { ascending: false })
-      .limit(400);
-    const latestSession = new Map<string, string>();
-    for (const h of history ?? []) {
-      if (!latestSession.has(h.exercise_id)) latestSession.set(h.exercise_id, h.session_id);
-      if (latestSession.get(h.exercise_id) !== h.session_id) continue;
-      const arr = lastByExercise.get(h.exercise_id) ?? [];
-      arr.push({ set_order: h.set_order, weight_kg: h.weight_kg, reps: h.reps });
-      lastByExercise.set(h.exercise_id, arr);
-    }
-    for (const arr of lastByExercise.values()) arr.sort((a, b) => a.set_order - b.set_order);
-  }
+  const lastByExercise = await loadLastTime(supabase, user.id, sessionId, exerciseIds);
 
   const sets = setsRes.data ?? [];
   const exercises: SessionExerciseView[] = list.map((l) => {
@@ -332,7 +335,6 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
       target_sets: l.target_sets,
       rep_min: l.rep_min,
       rep_max: l.rep_max,
-      skipped: l.skipped,
       sets: sets.filter((s) => s.exercise_id === l.exercise_id),
       last: lastByExercise.get(l.exercise_id) ?? [],
     };
@@ -450,19 +452,75 @@ export async function addExerciseToWorkoutAction(
   return { data };
 }
 
-export async function setExerciseSkippedAction(sessionExerciseId: string, skipped: boolean): Promise<ActionResult> {
+/** My own session_exercises row, or null. Never a buddy's. */
+async function getMyExerciseRow(supabase: Supa, userId: string, sessionExerciseId: string) {
+  const { data } = await supabase
+    .from("session_exercises")
+    .select("id, session_id, exercise_id")
+    .eq("id", sessionExerciseId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data;
+}
+
+/** Delete my sets for one exercise in a session. Sets first, so a failure never leaves sets without their exercise. */
+async function deleteMySets(supabase: Supa, userId: string, sessionId: string, exerciseId: string) {
+  return supabase.from("workout_sets").delete().eq("session_id", sessionId).eq("user_id", userId).eq("exercise_id", exerciseId);
+}
+
+export async function removeExerciseFromWorkoutAction(sessionExerciseId: string): Promise<ActionResult> {
   if (!idSchema.safeParse(sessionExerciseId).success) return { error: "Invalid exercise" };
   const supabase = await createClient();
   const user = await requireUser(supabase);
   if (!user) return { error: SIGN_IN_REQUIRED };
 
+  const row = await getMyExerciseRow(supabase, user.id, sessionExerciseId);
+  if (!row) return { error: "That exercise no longer exists" };
+
+  // shortcut: two statements, not one transaction; a failure between them leaves an empty exercise, never orphan sets. Upgrade to an RPC if that matters.
+  const sets = await deleteMySets(supabase, user.id, row.session_id, row.exercise_id);
+  if (sets.error) return { error: "Couldn't remove that exercise" };
+  const { error } = await supabase.from("session_exercises").delete().eq("id", row.id).eq("user_id", user.id);
+  if (error) return { error: "Couldn't remove that exercise" };
+  return { success: true };
+}
+
+/** Replace one exercise with another in the same slot (position, target sets and rep range stay). */
+export async function swapExerciseInWorkoutAction(
+  sessionExerciseId: string,
+  newExerciseId: string
+): Promise<ActionResult<{ last: LastTimeSet[] }>> {
+  if (!idSchema.safeParse(sessionExerciseId).success || !idSchema.safeParse(newExerciseId).success) {
+    return { error: "Invalid exercise" };
+  }
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+
+  const row = await getMyExerciseRow(supabase, user.id, sessionExerciseId);
+  if (!row) return { error: "That exercise no longer exists" };
+  if (row.exercise_id === newExerciseId) return { error: "Already doing that exercise" };
+
+  const { data: dupe } = await supabase
+    .from("session_exercises")
+    .select("id")
+    .eq("session_id", row.session_id)
+    .eq("user_id", user.id)
+    .eq("exercise_id", newExerciseId)
+    .limit(1);
+  if (dupe && dupe.length > 0) return { error: "That exercise is already in this workout" };
+
+  const sets = await deleteMySets(supabase, user.id, row.session_id, row.exercise_id);
+  if (sets.error) return { error: "Couldn't swap that exercise" };
   const { error } = await supabase
     .from("session_exercises")
-    .update({ skipped })
-    .eq("id", sessionExerciseId)
+    .update({ exercise_id: newExerciseId })
+    .eq("id", row.id)
     .eq("user_id", user.id);
-  if (error) return { error: "Couldn't update that exercise" };
-  return { success: true };
+  if (error) return { error: "Couldn't swap that exercise" };
+
+  const last = (await loadLastTime(supabase, user.id, row.session_id, [newExerciseId])).get(newExerciseId) ?? [];
+  return { data: { last } };
 }
 
 export async function finishWorkoutAction(sessionId: string): Promise<ActionResult> {
