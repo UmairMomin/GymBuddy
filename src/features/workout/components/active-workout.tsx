@@ -126,6 +126,7 @@ function SetRowView({
   onField,
   onBlur,
   onToggle,
+  readOnly,
 }: {
   row: Row;
   /** What the set badge shows. */
@@ -140,6 +141,8 @@ function SetRowView({
   onField: (field: "weight" | "reps", value: string) => void;
   onBlur: () => void;
   onToggle: () => void;
+  /** Your buddy's lane: shown, never edited from your screen. */
+  readOnly: boolean;
 }) {
   const partner = tone === "partner";
   // Accent per person: your theme accent, or the sky blue used for your buddy.
@@ -158,6 +161,7 @@ function SetRowView({
             aria-label={`${who} set ${number} ${field === "weight" ? `weight (${unit})` : "reps"}`}
             value={row[field]}
             placeholder={field === "weight" ? placeholder.weight : placeholder.reps}
+            readOnly={readOnly}
             onChange={(e) => onField(field, e.target.value)}
             onKeyDown={(e) => {
               // Desktop shortcut: Space in an empty field accepts the grey "last time" value. Never types a space.
@@ -181,6 +185,7 @@ function SetRowView({
         <button
           type="button"
           onClick={onToggle}
+          disabled={readOnly}
           aria-label={row.completed ? `${who} set ${number} logged, tap to undo` : `Log ${who} set ${number}`}
           aria-pressed={row.completed}
           className={cn(
@@ -333,6 +338,7 @@ function ExerciseCard({
                   onField={(field, value) => onField(row.id, field, value)}
                   onBlur={() => onBlurRow(row)}
                   onToggle={() => onToggleRow(laneTone, i)}
+                  readOnly={laneTone === "partner"}
                 />
               </li>
             ))}
@@ -356,12 +362,14 @@ function ExerciseCard({
             </button>
           )}
           {view === "sam" && (
-            <p className="mt-2 text-xs text-zinc-500">Correcting {partnerName}&rsquo;s sets. Edits are marked &ldquo;edited by you&rdquo;.</p>
+            <p className="mt-2 text-xs text-zinc-500">{partnerName}&rsquo;s sets. Only they can change these.</p>
           )}
 
-          <Button variant="outline" className="mt-2.5 h-11 w-full border-dashed text-zinc-400" onClick={onAddSet}>
-            <Plus className="h-4 w-4" /> Add set
-          </Button>
+          {view !== "sam" && (
+            <Button variant="outline" className="mt-2.5 h-11 w-full border-dashed text-zinc-400" onClick={onAddSet}>
+              <Plus className="h-4 w-4" /> Add set
+            </Button>
+          )}
         </>
     </section>
   );
@@ -392,7 +400,6 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   );
 
   const [exercises, setExercises] = React.useState<ExerciseState[]>(() => {
-    const partnerId = data.roster.find((r) => !r.isMe && (r.status === "joined" || r.status === "left"))?.userId ?? null;
     const names = (id: string) => data.roster.find((r) => r.userId === id)?.name ?? "Buddy";
     return data.exercises.map((e) => {
       const { sets, ...rest } = e;
@@ -402,8 +409,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         e.target_sets
       );
       const theirs = data.partnerSets.filter((s) => s.exercise_id === e.exercise_id).map((s) => rowFromSet(s, unit, userId, names));
-      const partnerRows = partnerId ? padLane(theirs, partnerId, rows.length) : theirs;
-      return { ...rest, rows, partnerRows };
+      return { ...rest, rows, partnerRows: theirs };
     });
   });
   const exercisesRef = React.useRef(exercises);
@@ -697,8 +703,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       prev.map((x) => {
         if (x.id !== e.id) return x;
         const rows = padLane(x.rows, userId, x.rows.length + 1);
-        const partnerRows = partner ? padLane(x.partnerRows, partner.userId, rows.length) : x.partnerRows;
-        return { ...x, rows, partnerRows };
+        return { ...x, rows };
       })
     );
   }
@@ -707,7 +712,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     const last = e.rows[e.rows.length - 1];
     if (!last || e.rows.length <= 1) return;
     setExercises((prev) =>
-      prev.map((x) => (x.id === e.id ? { ...x, rows: x.rows.slice(0, -1), partnerRows: x.partnerRows.slice(0, x.rows.length - 1) } : x))
+      prev.map((x) => (x.id === e.id ? { ...x, rows: x.rows.slice(0, -1), partnerRows: x.partnerRows } : x))
     );
     if (last.saved) void deleteSetAction(last.id).then((r) => r.error && setBanner(r.error));
     setMenuId(null);
@@ -748,7 +753,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         name: meta?.name ?? "Exercise",
         category: meta?.category ?? "other",
         rows,
-        partnerRows: partner ? padLane([], partner.userId, rows.length) : [],
+        partnerRows: [],
         last: res.data.last,
       };
       setExercises((prev) => prev.map((x) => (x.id === e.id ? swapped : x)));
@@ -787,7 +792,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         rep_min: null,
         rep_max: null,
         rows,
-        partnerRows: partner ? padLane([], partner.userId, rows.length) : [],
+        partnerRows: [],
         last: [],
       };
       setExercises((prev) => [...prev, added]);
@@ -842,13 +847,6 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     const sync = res.data;
     setRoster(sync.roster);
     setSessionState({ status: sync.status, endedAt: sync.endedAt });
-
-    const joinedPartner = sync.roster.find((r) => !r.isMe && (r.status === "joined" || r.status === "left"));
-    if (joinedPartner) {
-      setExercises((prev) =>
-        prev.map((e) => ({ ...e, partnerRows: padLane(e.partnerRows, joinedPartner.userId, e.rows.length) }))
-      );
-    }
 
     const serverSets = [...sync.mySets, ...sync.partnerSets];
     const local = exercisesRef.current.flatMap((e) => [...e.rows, ...e.partnerRows]).map((r) => ({

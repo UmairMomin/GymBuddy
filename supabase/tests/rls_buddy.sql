@@ -59,10 +59,11 @@ BEGIN
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL: joiner did not get own exercise list'; END IF;
   SELECT count(*) INTO n FROM public.workout_sets WHERE session_id = s_shared;
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL: joined buddy cannot see sets'; END IF;
-  -- mutual edit: B edits A's set
-  UPDATE public.workout_sets SET weight_kg = 32.5 WHERE id = set1;
-  SELECT revision_number, last_edited_by INTO rev, editor FROM public.workout_sets WHERE id = set1;
-  IF rev <> 2 OR editor <> b THEN RAISE EXCEPTION 'FAIL: revision/last_edited_by not stamped (% %)', rev, editor; END IF;
+  -- sets are personal: B can neither edit nor delete A's set
+  WITH u AS (UPDATE public.workout_sets SET weight_kg = 32.5 WHERE id = set1 RETURNING 1) SELECT count(*) INTO n FROM u;
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL: B edited A set'; END IF;
+  WITH d AS (DELETE FROM public.workout_sets WHERE id = set1 RETURNING 1) SELECT count(*) INTO n FROM d;
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL: B deleted A set'; END IF;
   -- B logs own set
   INSERT INTO public.workout_sets (session_id, user_id, exercise_id, set_order, weight_kg, reps)
     VALUES (s_shared, b, ex, 1, 24, 12);
@@ -75,16 +76,13 @@ BEGIN
   END;
   EXECUTE 'RESET ROLE';
 
-  -- === as A finishes; B can still edit afterwards ===
+  -- === A finishes, then can still edit their own set ===
   EXECUTE 'SET LOCAL ROLE authenticated';
   PERFORM set_config('request.jwt.claims', json_build_object('sub', a, 'role', 'authenticated')::text, true);
   PERFORM public.finish_workout_session(s_shared);
-  EXECUTE 'RESET ROLE';
-  EXECUTE 'SET LOCAL ROLE authenticated';
-  PERFORM set_config('request.jwt.claims', json_build_object('sub', b, 'role', 'authenticated')::text, true);
   UPDATE public.workout_sets SET reps = 11 WHERE id = set1;
   SELECT revision_number INTO rev FROM public.workout_sets WHERE id = set1;
-  IF rev <> 3 THEN RAISE EXCEPTION 'FAIL: edit after finish rejected (rev %)', rev; END IF;
+  IF rev <> 2 THEN RAISE EXCEPTION 'FAIL: own edit after finish rejected (rev %)', rev; END IF;
   EXECUTE 'RESET ROLE';
 
   -- === as C (stranger) sees nothing ===

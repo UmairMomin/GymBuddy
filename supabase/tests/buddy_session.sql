@@ -125,7 +125,7 @@ BEGIN
   IF st <> 'left' THEN RAISE EXCEPTION 'FAIL: leave not recorded (%)', st; END IF;
   EXECUTE 'RESET ROLE';
 
-  -- Account deletion: B edited A's set; deleting B must not be blocked and must keep A's set
+  -- Account deletion: deleting B must not be blocked and must keep A's set
   EXECUTE 'SET LOCAL ROLE authenticated';
   PERFORM set_config('request.jwt.claims', json_build_object('sub', a, 'role', 'authenticated')::text, true);
   INSERT INTO public.workout_sets (id, session_id, user_id, exercise_id, set_order, weight_kg, reps)
@@ -133,7 +133,7 @@ BEGIN
   EXECUTE 'RESET ROLE';
   EXECUTE 'SET LOCAL ROLE authenticated';
   PERFORM set_config('request.jwt.claims', json_build_object('sub', b, 'role', 'authenticated')::text, true);
-  UPDATE public.workout_sets SET reps = 6 WHERE session_id = s1 AND user_id = a AND weight_kg = 50;
+  UPDATE public.workout_sets SET reps = 6 WHERE session_id = s1 AND user_id = a AND weight_kg = 50; -- no-op under RLS: sets are personal
   EXECUTE 'RESET ROLE';
   DELETE FROM auth.users WHERE id = b;
   SELECT count(*) INTO n FROM public.workout_sets WHERE session_id = s1 AND user_id = a AND weight_kg = 50 AND last_edited_by IS NULL;
