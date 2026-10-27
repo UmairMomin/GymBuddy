@@ -423,6 +423,9 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   /** Exercise being replaced while the picker is open (null = the picker adds). */
   const [swapId, setSwapId] = React.useState<string | null>(null);
   /** Pending destructive change on an exercise that has logged sets; newId set = swap, else remove. */
+  const [offers, setOffers] = React.useState<Array<{ exercise_id: string; name: string; byName: string }>>([]);
+  /** Buddy exercises already seen (or on my list at load): only genuinely new ones are offered. */
+  const seenOffers = React.useRef<Set<string> | null>(null);
   const [setChange, setSetChange] = React.useState<{ ex: ExerciseState; kind: "add" | "remove" } | null>(null);
   const [pendingChange, setPendingChange] = React.useState<{ ex: ExerciseState; newId?: string } | null>(null);
   const [finishOpen, setFinishOpen] = React.useState(false);
@@ -789,7 +792,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     else swapExercise(target, exerciseId);
   }
 
-  function addExercise(exerciseId: string) {
+  function addExercise(exerciseId: string, fallbackName = "Exercise") {
     startTransition(async () => {
       const res = await addExerciseToWorkoutAction(session.id, exerciseId);
       if (res.error || !res.data) {
@@ -801,7 +804,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       const added: ExerciseState = {
         id: res.data.id,
         exercise_id: exerciseId,
-        name: meta?.name ?? "Exercise",
+        name: meta?.name ?? fallbackName,
         category: meta?.category ?? "other",
         position: res.data.position,
         target_sets: 3,
@@ -863,6 +866,18 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     const sync = res.data;
     setRoster(sync.roster);
     setSessionState({ status: sync.status, endedAt: sync.endedAt });
+
+    // First snapshot is the baseline; after that, new buddy exercises I don't have become offers.
+    const theirIds = sync.partnerExercises.map((x) => x.exercise_id);
+    if (seenOffers.current === null) {
+      seenOffers.current = new Set(theirIds);
+    } else {
+      const seen = seenOffers.current;
+      const mine = new Set(exercisesRef.current.map((x) => x.exercise_id));
+      const fresh = sync.partnerExercises.filter((x) => !seen.has(x.exercise_id) && !mine.has(x.exercise_id));
+      for (const id of theirIds) seen.add(id);
+      if (fresh.length > 0) setOffers((prev) => [...prev, ...fresh.filter((f) => !prev.some((o) => o.exercise_id === f.exercise_id))]);
+    }
 
     const serverSets = [...sync.mySets, ...sync.partnerSets];
     const local = exercisesRef.current.flatMap((e) => [...e.rows, ...e.partnerRows]).map((r) => ({
@@ -1050,6 +1065,27 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
               </Button>
             </>
           )}
+        </div>
+      )}
+
+      {offers[0] && (
+        <div role="status" className="mb-3 flex items-center gap-3 rounded-2xl bg-[#a8cbff]/15 px-3.5 py-2.5 text-sm text-zinc-100">
+          <span className="min-w-0 flex-1">
+            {offers[0].byName.split(" ")[0]} added {offers[0].name}. Add it to your workout?
+          </span>
+          <Button size="sm" variant="ghost" onClick={() => setOffers((prev) => prev.slice(1))}>
+            No thanks
+          </Button>
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              addExercise(offers[0].exercise_id, offers[0].name);
+              setOffers((prev) => prev.slice(1));
+            }}
+          >
+            Add
+          </Button>
         </div>
       )}
 

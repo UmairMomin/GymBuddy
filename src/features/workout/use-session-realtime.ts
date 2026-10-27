@@ -75,6 +75,11 @@ export function useSessionRealtime(
         )
         .on(
           "postgres_changes",
+          { event: "*", schema: "public", table: "session_exercises", filter: `session_id=eq.${sessionId}` },
+          () => handlers.current.onRosterChange()
+        )
+        .on(
+          "postgres_changes",
           { event: "UPDATE", schema: "public", table: "workout_sessions", filter: `id=eq.${sessionId}` },
           () => handlers.current.onRosterChange()
         )

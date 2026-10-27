@@ -592,6 +592,8 @@ export type SyncData = {
   roster: RosterEntry[];
   mySets: SetRow[];
   partnerSets: SetRow[];
+  /** Exercises on my buddy's list, so I can be offered ones they add mid-workout. */
+  partnerExercises: Array<{ exercise_id: string; name: string; byName: string }>;
 };
 
 /** Authoritative snapshot used to recover after a reconnect (or a missed realtime event). */
@@ -601,19 +603,35 @@ export async function getSessionSyncAction(sessionId: string): Promise<ActionRes
   const user = await requireUser(supabase);
   if (!user) return { error: SIGN_IN_REQUIRED };
 
-  const [sessionRes, setsRes, rosterRes] = await Promise.all([
+  const [sessionRes, setsRes, rosterRes, theirExRes] = await Promise.all([
     supabase.from("workout_sessions").select("status, ended_at, host_id").eq("id", sessionId).maybeSingle(),
     supabase.from("workout_sets").select(SET_COLUMNS).eq("session_id", sessionId).order("set_order"),
     supabase.from("session_participants").select("user_id, status, completed_at").eq("session_id", sessionId),
+    supabase
+      .from("session_exercises")
+      .select("user_id, exercise_id, position, exercises(name)")
+      .eq("session_id", sessionId)
+      .neq("user_id", user.id)
+      .order("position"),
   ]);
   if (!sessionRes.data || setsRes.error) return { error: "Couldn't refresh this workout" };
 
   const all = setsRes.data ?? [];
+  const roster = await buildRoster(supabase, user.id, sessionRes.data.host_id, rosterRes.data ?? []);
+  const partnerExercises = (theirExRes.data ?? []).map((x) => {
+    const ex = Array.isArray(x.exercises) ? x.exercises[0] : x.exercises;
+    return {
+      exercise_id: x.exercise_id,
+      name: ex?.name ?? "an exercise",
+      byName: roster.find((r) => r.userId === x.user_id)?.name ?? "Your buddy",
+    };
+  });
   return {
     data: {
       status: sessionRes.data.status,
       endedAt: sessionRes.data.ended_at,
-      roster: await buildRoster(supabase, user.id, sessionRes.data.host_id, rosterRes.data ?? []),
+      roster,
+      partnerExercises,
       mySets: all.filter((s) => s.user_id === user.id),
       partnerSets: all.filter((s) => s.user_id !== user.id),
     },
