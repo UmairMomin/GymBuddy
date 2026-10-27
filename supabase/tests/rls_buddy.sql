@@ -59,12 +59,10 @@ BEGIN
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL: joiner did not get own exercise list'; END IF;
   SELECT count(*) INTO n FROM public.workout_sets WHERE session_id = s_shared;
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL: joined buddy cannot see sets'; END IF;
-  -- mutual edit: B edits A's values, but cannot delete A's set
+  -- mutual edit: B edits A's values (deleting is mutual too, per the add/remove-for-both flow)
   UPDATE public.workout_sets SET weight_kg = 32.5 WHERE id = set1;
   SELECT revision_number, last_edited_by INTO rev, editor FROM public.workout_sets WHERE id = set1;
   IF rev <> 2 OR editor <> b THEN RAISE EXCEPTION 'FAIL: revision/last_edited_by not stamped (% %)', rev, editor; END IF;
-  WITH d AS (DELETE FROM public.workout_sets WHERE id = set1 RETURNING 1) SELECT count(*) INTO n FROM d;
-  IF n <> 0 THEN RAISE EXCEPTION 'FAIL: B deleted A set'; END IF;
   -- B logs own set
   INSERT INTO public.workout_sets (session_id, user_id, exercise_id, set_order, weight_kg, reps)
     VALUES (s_shared, b, ex, 1, 24, 12);

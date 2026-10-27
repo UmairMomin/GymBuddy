@@ -60,6 +60,7 @@ type Row = {
 
 type ExerciseState = Omit<SessionExerciseView, "sets"> & { rows: Row[]; partnerRows: Row[] };
 type Lane = "me" | "partner";
+type SetTarget = Lane | "both";
 
 /** Wall-clock time for event handlers (kept outside the component body so render stays pure). */
 const nowMs = () => Date.now();
@@ -359,11 +360,9 @@ function ExerciseCard({
             <p className="mt-2 text-xs text-zinc-500">Correcting {partnerName}&rsquo;s sets. Edits are marked &ldquo;edited by you&rdquo;.</p>
           )}
 
-          {view !== "sam" && (
-            <Button variant="outline" className="mt-2.5 h-11 w-full border-dashed text-zinc-400" onClick={onAddSet}>
-              <Plus className="h-4 w-4" /> Add set
-            </Button>
-          )}
+          <Button variant="outline" className="mt-2.5 h-11 w-full border-dashed text-zinc-400" onClick={onAddSet}>
+            <Plus className="h-4 w-4" /> Add set
+          </Button>
         </>
     </section>
   );
@@ -424,6 +423,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   /** Exercise being replaced while the picker is open (null = the picker adds). */
   const [swapId, setSwapId] = React.useState<string | null>(null);
   /** Pending destructive change on an exercise that has logged sets; newId set = swap, else remove. */
+  const [setChange, setSetChange] = React.useState<{ ex: ExerciseState; kind: "add" | "remove" } | null>(null);
   const [pendingChange, setPendingChange] = React.useState<{ ex: ExerciseState; newId?: string } | null>(null);
   const [finishOpen, setFinishOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -692,24 +692,46 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     persist(e, row, { weight, reps, completed: row.completed });
   }
 
-  function addSet(e: ExerciseState) {
+  /** Add/remove a set in my lane, my buddy's lane, or both. */
+  function addSet(e: ExerciseState, who: SetTarget) {
     setExercises((prev) =>
       prev.map((x) => {
         if (x.id !== e.id) return x;
-        const rows = padLane(x.rows, userId, x.rows.length + 1);
-        return { ...x, rows };
+        const rows = who !== "partner" ? padLane(x.rows, userId, x.rows.length + 1) : x.rows;
+        const partnerRows =
+          who !== "me" && partner ? padLane(x.partnerRows, partner.userId, x.partnerRows.length + 1) : x.partnerRows;
+        return { ...x, rows, partnerRows };
       })
     );
   }
 
-  function removeLastSet(e: ExerciseState) {
-    const last = e.rows[e.rows.length - 1];
-    if (!last || e.rows.length <= 1) return;
+  function removeLastSet(e: ExerciseState, who: SetTarget) {
+    const dropMine = who !== "partner" && e.rows.length > 1 ? e.rows[e.rows.length - 1] : null;
+    const dropTheirs = who !== "me" && e.partnerRows.length > 1 ? e.partnerRows[e.partnerRows.length - 1] : null;
+    if (!dropMine && !dropTheirs) return;
     setExercises((prev) =>
-      prev.map((x) => (x.id === e.id ? { ...x, rows: x.rows.slice(0, -1), partnerRows: x.partnerRows } : x))
+      prev.map((x) =>
+        x.id === e.id
+          ? { ...x, rows: dropMine ? x.rows.slice(0, -1) : x.rows, partnerRows: dropTheirs ? x.partnerRows.slice(0, -1) : x.partnerRows }
+          : x
+      )
     );
-    if (last.saved) void deleteSetAction(last.id).then((r) => r.error && setBanner(r.error));
+    for (const r of [dropMine, dropTheirs]) {
+      if (r?.saved) void deleteSetAction(r.id).then((res) => res.error && setBanner(res.error));
+    }
     setMenuId(null);
+  }
+
+  /** On the All tab, ask whose list changes; on Mine / buddy tabs it is that person. */
+  function requestSetChange(e: ExerciseState, kind: "add" | "remove") {
+    if (view === "all" && partner) {
+      setSetChange({ ex: e, kind });
+      setMenuId(null);
+      return;
+    }
+    const who: SetTarget = view === "sam" ? "partner" : "me";
+    if (kind === "add") addSet(e, who);
+    else removeLastSet(e, who);
   }
 
   /** Drop queued offline writes for an exercise so they can't re-create sets we just deleted. */
@@ -1076,7 +1098,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
                 onBlurRow={(row) => commitEdit(e, row)}
                 onToggleRow={(lane, index) => toggleComplete(e, lane, index)}
                 onOpenBuddy={() => setFilter("sam")}
-                onAddSet={() => addSet(e)}
+                onAddSet={() => requestSetChange(e, "add")}
               />
             ))}
             <Button variant="outline" className="h-12 w-full border-dashed text-zinc-400" onClick={() => setAddOpen(true)}>
@@ -1107,7 +1129,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
             >
               Swap exercise
             </Button>
-            <Button variant="secondary" className="w-full justify-start" disabled={menuEx.rows.length <= 1} onClick={() => removeLastSet(menuEx)}>
+            <Button variant="secondary" className="w-full justify-start" disabled={(view === "sam" ? menuEx.partnerRows : menuEx.rows).length <= 1} onClick={() => requestSetChange(menuEx, "remove")}>
               Remove last set
             </Button>
             <Button
@@ -1153,6 +1175,35 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
             {pickable.length === 0 && <li className="p-4 text-center text-sm text-zinc-400">No matching exercises.</li>}
           </ul>
         </div>
+      </Sheet>
+
+      {/* All tab: whose list gets the extra / fewer set */}
+      <Sheet
+        open={setChange !== null}
+        onClose={() => setSetChange(null)}
+        title={setChange?.kind === "add" ? "Add a set for…" : "Remove the last set for…"}
+        footer={
+          setChange && (
+            <div className="space-y-2">
+              {(["me", "both"] as const).map((who) => (
+                <Button
+                  key={who}
+                  variant={who === "both" ? "secondary" : "default"}
+                  className="w-full"
+                  onClick={() => {
+                    if (setChange.kind === "add") addSet(setChange.ex, who);
+                    else removeLastSet(setChange.ex, who);
+                    setSetChange(null);
+                  }}
+                >
+                  {who === "me" ? "Only me" : `Both of us (${partnerFirst})`}
+                </Button>
+              ))}
+            </div>
+          )
+        }
+      >
+        {setChange && <p className="pt-2 text-sm text-zinc-300">{setChange.ex.name}</p>}
       </Sheet>
 
       {/* confirm removing/swapping an exercise that has logged sets */}
