@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import {
   addExerciseToWorkoutAction,
+  addSessionRoutineAction,
+  getRoutineOfferAction,
   deleteSetAction,
   discardWorkoutAction,
   finishMyWorkoutAction,
@@ -249,6 +251,7 @@ function ExerciseCard({
   const mineDone = ex.rows.filter((r) => r.completed).length;
   const theirDone = ex.partnerRows.filter((r) => r.completed);
   const reps = repRange(ex);
+  const allDone = ex.rows.length > 0 && mineDone === ex.rows.length;
 
   if (!open) {
     const parts = [
@@ -266,10 +269,16 @@ function ExerciseCard({
           className="flex min-h-[60px] w-full items-center gap-3 rounded-[18px] border border-zinc-800 bg-zinc-900 p-3.5 text-left transition-colors hover:bg-zinc-800/60"
         >
           <div className="min-w-0 flex-1">
-            <p className="truncate font-display text-xl font-bold uppercase leading-tight tracking-wide">{ex.name}</p>
-            <p className="truncate text-[13px] text-zinc-400">{parts.join(" · ")}</p>
+            <p className={cn("truncate font-display text-xl font-bold uppercase leading-tight tracking-wide", allDone && "text-emerald-400")}>{ex.name}</p>
+            <p className={cn("truncate text-[13px]", allDone ? "text-emerald-300" : "text-zinc-400")}>{parts.join(" · ")}</p>
           </div>
-          <ChevronDown aria-hidden className="h-5 w-5 shrink-0 text-zinc-400" />
+          {allDone ? (
+            <span role="img" aria-label="All sets done" className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-emerald-400 text-emerald-950">
+              <Check aria-hidden className="h-4 w-4 stroke-[3.5]" />
+            </span>
+          ) : (
+            <ChevronDown aria-hidden className="h-5 w-5 shrink-0 text-zinc-400" />
+          )}
         </button>
       </section>
     );
@@ -284,7 +293,10 @@ function ExerciseCard({
     <section aria-label={ex.name} className="rounded-[18px] border border-zinc-800 bg-zinc-900 p-3.5">
       <div className="mb-2.5 flex items-start justify-between gap-2">
         <button type="button" aria-expanded onClick={onToggle} className="min-w-0 flex-1 py-1 text-left">
-          <span className="block break-words font-display text-xl font-bold uppercase leading-[1.1] tracking-normal">{ex.name}</span>
+          <span className={cn("block break-words font-display text-xl font-bold uppercase leading-[1.1] tracking-normal", allDone && "text-emerald-400")}>
+            {allDone && <Check aria-label="All sets done" className="mr-1.5 inline h-5 w-5 stroke-[3.5] align-[-3px]" />}
+            {ex.name}
+          </span>
           {ex.last.length > 0 ? (
             <span className="block text-xs text-zinc-400">
               Last time: {ex.last.map((l) => `${fmt(toPreferredWeight(l.weight_kg, unit))}×${l.reps}`).join(", ")} {unit}
@@ -426,6 +438,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const [offers, setOffers] = React.useState<Array<{ exercise_id: string; name: string; byName: string }>>([]);
   /** Buddy exercises already seen (or on my list at load): only genuinely new ones are offered. */
   const seenOffers = React.useRef<Set<string> | null>(null);
+  const [routineOffer, setRoutineOffer] = React.useState<string | null>(null);
   const [setChange, setSetChange] = React.useState<{ ex: ExerciseState; kind: "add" | "remove" } | null>(null);
   const [pendingChange, setPendingChange] = React.useState<{ ex: ExerciseState; newId?: string } | null>(null);
   const [finishOpen, setFinishOpen] = React.useState(false);
@@ -790,6 +803,34 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     if (!target) return addExercise(exerciseId);
     if (target.rows.some((r) => r.saved)) setPendingChange({ ex: target, newId: exerciseId });
     else swapExercise(target, exerciseId);
+  }
+
+  // Joined someone else's workout whose exercises match none of my routines: offer to keep it (once).
+  React.useEffect(() => {
+    if (session.isHost || session.status !== "in_progress") return;
+    const key = `gb-routine-offer:${session.id}`;
+    try {
+      if (localStorage.getItem(key)) return;
+    } catch {
+      /* private mode: just ask */
+    }
+    let cancelled = false;
+    void getRoutineOfferAction(session.id).then((res) => {
+      if (!cancelled && res.data) setRoutineOffer(res.data.name);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session.id, session.isHost, session.status]);
+
+  function answerRoutineOffer(add: boolean) {
+    setRoutineOffer(null);
+    try {
+      localStorage.setItem(`gb-routine-offer:${session.id}`, "1");
+    } catch {
+      /* ignore */
+    }
+    if (add) void addSessionRoutineAction(session.id).then((r) => r.error && setBanner(r.error));
   }
 
   function addExercise(exerciseId: string, fallbackName = "Exercise") {
@@ -1211,6 +1252,22 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
             {pickable.length === 0 && <li className="p-4 text-center text-sm text-zinc-400">No matching exercises.</li>}
           </ul>
         </div>
+      </Sheet>
+
+      <Sheet
+        open={routineOffer !== null}
+        onClose={() => answerRoutineOffer(false)}
+        title="Add this routine?"
+        footer={
+          <div className="space-y-2">
+            <Button className="w-full" onClick={() => answerRoutineOffer(true)}>Add to my routines</Button>
+            <Button variant="ghost" className="w-full" onClick={() => answerRoutineOffer(false)}>Not now</Button>
+          </div>
+        }
+      >
+        <p className="pt-2 text-sm text-zinc-300">
+          &ldquo;{routineOffer}&rdquo; has exercises that aren&rsquo;t in any of your routines. Save it so you can start it yourself later?
+        </p>
       </Sheet>
 
       {/* All tab: whose list gets the extra / fewer set */}

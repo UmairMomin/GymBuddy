@@ -24,6 +24,11 @@ export type RecentSession = {
   startedAt: string;
   endedAt: string | null;
   withName: string | null;
+  /** When I finished my part (can be before the session ends). */
+  myEndedAt: string | null;
+  /** My logged sets and total volume (kg), for the Home summary. */
+  sets: number;
+  volumeKg: number;
 };
 
 export type TodayData = {
@@ -32,6 +37,7 @@ export type TodayData = {
   routines: RoutineSummary[];
   /** Index = weekday (0 = Mon); routine id or null for rest. */
   schedule: Array<string | null>;
+  unit: "kg" | "lb";
   activeSession: { id: string; name: string; startedAt: string } | null;
   recent: RecentSession[];
 };
@@ -172,10 +178,13 @@ export async function getTodayAction(): Promise<ActionResult<TodayData>> {
   const active = Array.isArray(activeRow) ? activeRow[0] : activeRow;
 
   // Over, or over for me (I finished while my buddy is still training).
+  const myEnd = new Map<string, string | null>();
   const recentSessions = (recentRes.data ?? [])
     .map((r) => {
       const s = Array.isArray(r.workout_sessions) ? r.workout_sessions[0] : r.workout_sessions;
-      return s && (r.completed_at || s.status !== "in_progress") ? s : null;
+      if (!s || !(r.completed_at || s.status !== "in_progress")) return null;
+      myEnd.set(s.id, r.completed_at);
+      return s;
     })
     .filter((s): s is NonNullable<typeof s> => Boolean(s))
     .sort((a, b) => b.started_at.localeCompare(a.started_at));
@@ -198,11 +207,33 @@ export async function getTodayAction(): Promise<ActionResult<TodayData>> {
     for (const o of others ?? []) withNames.set(o.session_id, people.get(o.user_id) ?? "Buddy");
   }
 
+  const stats = new Map<string, { sets: number; volumeKg: number }>();
+  let unit: "kg" | "lb" = "kg";
+  if (recentSessions.length > 0) {
+    const [{ data: mine }, { data: prof }] = await Promise.all([
+      supabase
+        .from("workout_sets")
+        .select("session_id, weight_kg, reps")
+        .in("session_id", recentSessions.map((s) => s.id))
+        .eq("user_id", user.id)
+        .eq("completed", true),
+      supabase.from("profiles").select("preferred_unit").eq("id", user.id).maybeSingle(),
+    ]);
+    for (const m of mine ?? []) {
+      const cur = stats.get(m.session_id) ?? { sets: 0, volumeKg: 0 };
+      cur.sets += 1;
+      cur.volumeKg += Number(m.weight_kg) * m.reps;
+      stats.set(m.session_id, cur);
+    }
+    if (prof?.preferred_unit === "lb") unit = "lb";
+  }
+
   return {
     data: {
       buddy,
       routines,
       schedule,
+      unit,
       activeSession: active ? { id: active.id, name: active.name, startedAt: active.started_at } : null,
       recent: recentSessions.map((s) => ({
         id: s.id,
@@ -211,6 +242,9 @@ export async function getTodayAction(): Promise<ActionResult<TodayData>> {
         startedAt: s.started_at,
         endedAt: s.ended_at,
         withName: withNames.get(s.id) ?? null,
+        myEndedAt: myEnd.get(s.id) ?? null,
+        sets: stats.get(s.id)?.sets ?? 0,
+        volumeKg: stats.get(s.id)?.volumeKg ?? 0,
       })),
     },
   };
@@ -779,4 +813,59 @@ export async function getActiveWorkoutAction(): Promise<ActiveWorkoutInfo | null
   const row = data?.[0]?.workout_sessions;
   const s = Array.isArray(row) ? row[0] : row;
   return s ? { id: s.id, name: s.name, startedAt: s.started_at } : null;
+}
+
+/** My exercise list in a session vs. my own routines, compared by exercises (not by name). */
+async function matchSessionToMyRoutines(supabase: Supa, userId: string, sessionId: string) {
+  const [{ data: list }, { data: routines }, { data: sess }] = await Promise.all([
+    supabase
+      .from("session_exercises")
+      .select("exercise_id, position, target_sets, rep_min, rep_max")
+      .eq("session_id", sessionId)
+      .eq("user_id", userId)
+      .eq("skipped", false)
+      .order("position"),
+    supabase.from("routines").select("routine_versions(version_number, structure_json)").eq("owner_id", userId).is("archived_at", null),
+    supabase.from("workout_sessions").select("name").eq("id", sessionId).maybeSingle(),
+  ]);
+  const key = (ids: string[]) => [...new Set(ids)].sort().join(",");
+  const mine = list ?? [];
+  const known = new Set(
+    (routines ?? []).map((r) => {
+      const latest = [...(r.routine_versions ?? [])].sort((a, b) => b.version_number - a.version_number)[0];
+      const items = Array.isArray(latest?.structure_json) ? (latest.structure_json as Array<{ exercise_id?: string }>) : [];
+      return key(items.map((i) => i.exercise_id ?? ""));
+    })
+  );
+  return { name: sess?.name ?? "Shared workout", items: mine, isNew: mine.length > 0 && !known.has(key(mine.map((m) => m.exercise_id))) };
+}
+
+/** Should I be asked to add this shared workout as one of my routines? */
+export async function getRoutineOfferAction(sessionId: string): Promise<ActionResult<{ name: string } | null>> {
+  if (!idSchema.safeParse(sessionId).success) return { error: "Invalid workout" };
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+  const m = await matchSessionToMyRoutines(supabase, user.id, sessionId);
+  return { data: m.isNew ? { name: m.name } : null };
+}
+
+export async function addSessionRoutineAction(sessionId: string): Promise<ActionResult> {
+  if (!idSchema.safeParse(sessionId).success) return { error: "Invalid workout" };
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+  const m = await matchSessionToMyRoutines(supabase, user.id, sessionId);
+  if (!m.isNew) return { success: true };
+
+  const { error } = await supabase.rpc("save_routine", {
+    p_routine_id: crypto.randomUUID(),
+    p_name: m.name.slice(0, 80),
+    p_description: "",
+    p_structure: m.items.map((i, position) => ({ ...i, position })),
+    p_weekdays: [],
+  });
+  if (error) return { error: rpcMessage(error) };
+  revalidatePath("/plan");
+  return { success: true };
 }
