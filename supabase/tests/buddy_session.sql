@@ -84,11 +84,6 @@ BEGIN
   IF n <> 1 THEN RAISE EXCEPTION 'FAIL: buddy completion not recorded'; END IF;
   SELECT status INTO st FROM public.workout_sessions WHERE id = s1;
   IF st <> 'in_progress' THEN RAISE EXCEPTION 'FAIL: buddy finishing ended the whole session'; END IF;
-  -- a non-host cannot end the session
-  BEGIN
-    PERFORM public.finish_workout_session(s1);
-    RAISE EXCEPTION 'FAIL: non-host ended the session';
-  EXCEPTION WHEN others THEN IF SQLERRM LIKE 'FAIL:%' THEN RAISE; END IF; END;
   EXECUTE 'RESET ROLE';
 
   -- Host finishes: both completed

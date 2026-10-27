@@ -379,7 +379,8 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
 
   const [roster, setRoster] = React.useState<RosterEntry[]>(data.roster);
   const [sessionState, setSessionState] = React.useState({ status: session.status, endedAt: session.endedAt });
-  const live = sessionState.status === "in_progress";
+  const myDoneAt = roster.find((r) => r.isMe)?.completedAt ?? null;
+  const live = sessionState.status === "in_progress" && !myDoneAt;
 
   const me = roster.find((r) => r.isMe);
   const myName = me?.name ?? "You";
@@ -440,7 +441,8 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   );
 
   const now = useNow(live, 1000);
-  const endMs = sessionState.endedAt ? Date.parse(sessionState.endedAt) : now;
+  const endAt = myDoneAt ?? sessionState.endedAt;
+  const endMs = endAt ? Date.parse(endAt) : now;
   const elapsed = Math.max(0, (endMs - Date.parse(session.startedAt)) / 1000);
 
   const menuEx = exercises.find((e) => e.id === menuId);
@@ -900,9 +902,9 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     });
   }
 
-  function finish() {
+  function finish(forBoth = false) {
     startTransition(async () => {
-      const res = session.isHost ? await finishWorkoutAction(session.id) : await finishMyWorkoutAction(session.id);
+      const res = forBoth ? await finishWorkoutAction(session.id) : await finishMyWorkoutAction(session.id);
       if (res.error) {
         setBanner(res.error);
         setFinishOpen(false);
@@ -1190,12 +1192,17 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       <Sheet
         open={finishOpen}
         onClose={() => setFinishOpen(false)}
-        title={session.isHost ? "Finish workout?" : "Finish your workout?"}
+        title="Finish your workout?"
         footer={
           <div className="space-y-2">
-            <Button className="w-full" disabled={busy} onClick={finish}>
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />} {session.isHost ? "Finish workout" : "Finish my workout"}
+            <Button className="w-full" disabled={busy} onClick={() => finish()}>
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Finish my workout
             </Button>
+            {partner?.status === "joined" && !partner.completedAt && (
+              <Button variant="secondary" className="w-full" disabled={busy} onClick={() => finish(true)}>
+                Finish for both of us
+              </Button>
+            )}
             {session.isHost && (
               <Button variant="ghost" className="w-full text-red-400" disabled={busy} onClick={discard}>
                 Discard workout

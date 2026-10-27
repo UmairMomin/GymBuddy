@@ -71,6 +71,7 @@ export type RosterEntry = {
   status: string;
   isMe: boolean;
   isHost: boolean;
+  completedAt: string | null;
 };
 
 export type PendingInvite = { sessionId: string; name: string; hostName: string };
@@ -121,14 +122,14 @@ export async function getTodayAction(): Promise<ActionResult<TodayData>> {
       .select("workout_sessions!inner(id, name, status, started_at)")
       .eq("user_id", user.id)
       .eq("status", "joined")
+      .is("completed_at", null)
       .eq("workout_sessions.status", "in_progress")
       .limit(1),
     supabase
       .from("session_participants")
-      .select("workout_sessions!inner(id, name, status, started_at, ended_at)")
+      .select("completed_at, workout_sessions!inner(id, name, status, started_at, ended_at)")
       .eq("user_id", user.id)
       .in("status", ["joined", "left"])
-      .neq("workout_sessions.status", "in_progress")
       .order("created_at", { ascending: false })
       .limit(5),
     supabase.from("buddy_links").select("requester_id, addressee_id").eq("status", "accepted").limit(1),
@@ -170,8 +171,12 @@ export async function getTodayAction(): Promise<ActionResult<TodayData>> {
   const activeRow = activeRes.data?.[0]?.workout_sessions;
   const active = Array.isArray(activeRow) ? activeRow[0] : activeRow;
 
+  // Over, or over for me (I finished while my buddy is still training).
   const recentSessions = (recentRes.data ?? [])
-    .map((r) => (Array.isArray(r.workout_sessions) ? r.workout_sessions[0] : r.workout_sessions))
+    .map((r) => {
+      const s = Array.isArray(r.workout_sessions) ? r.workout_sessions[0] : r.workout_sessions;
+      return s && (r.completed_at || s.status !== "in_progress") ? s : null;
+    })
     .filter((s): s is NonNullable<typeof s> => Boolean(s))
     .sort((a, b) => b.started_at.localeCompare(a.started_at));
 
@@ -300,7 +305,7 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
       .select("id, name, category, primary_equipment, notes, is_custom")
       .order("name", { ascending: true }),
     supabase.from("workout_sets").select(SET_COLUMNS).eq("session_id", sessionId).neq("user_id", user.id).order("set_order"),
-    supabase.from("session_participants").select("user_id, status").eq("session_id", sessionId),
+    supabase.from("session_participants").select("user_id, status, completed_at").eq("session_id", sessionId),
     supabase.from("buddy_links").select("requester_id, addressee_id").eq("status", "accepted").limit(1),
   ]);
 
@@ -562,7 +567,7 @@ async function buildRoster(
   supabase: Supa,
   myId: string,
   hostId: string,
-  rows: Array<{ user_id: string; status: string }>
+  rows: Array<{ user_id: string; status: string; completed_at: string | null }>
 ): Promise<RosterEntry[]> {
   const ids = [...new Set(rows.map((r) => r.user_id))];
   const names = new Map<string, string>();
@@ -576,6 +581,7 @@ async function buildRoster(
     status: r.status,
     isMe: r.user_id === myId,
     isHost: r.user_id === hostId,
+    completedAt: r.completed_at,
   }));
 }
 
@@ -597,7 +603,7 @@ export async function getSessionSyncAction(sessionId: string): Promise<ActionRes
   const [sessionRes, setsRes, rosterRes] = await Promise.all([
     supabase.from("workout_sessions").select("status, ended_at, host_id").eq("id", sessionId).maybeSingle(),
     supabase.from("workout_sets").select(SET_COLUMNS).eq("session_id", sessionId).order("set_order"),
-    supabase.from("session_participants").select("user_id, status").eq("session_id", sessionId),
+    supabase.from("session_participants").select("user_id, status, completed_at").eq("session_id", sessionId),
   ]);
   if (!sessionRes.data || setsRes.error) return { error: "Couldn't refresh this workout" };
 
@@ -748,6 +754,7 @@ export async function getActiveWorkoutAction(): Promise<ActiveWorkoutInfo | null
     .select("workout_sessions!inner(id, name, status, started_at)")
     .eq("user_id", user.id)
     .eq("status", "joined")
+    .is("completed_at", null)
     .eq("workout_sessions.status", "in_progress")
     .limit(1);
   const row = data?.[0]?.workout_sessions;
