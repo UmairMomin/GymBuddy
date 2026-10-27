@@ -303,6 +303,7 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
     supabase
       .from("exercises")
       .select("id, name, category, primary_equipment, notes, is_custom")
+      .is("archived_at", null)
       .order("name", { ascending: true }),
     supabase.from("workout_sets").select(SET_COLUMNS).eq("session_id", sessionId).neq("user_id", user.id).order("set_order"),
     supabase.from("session_participants").select("user_id, status, completed_at").eq("session_id", sessionId),

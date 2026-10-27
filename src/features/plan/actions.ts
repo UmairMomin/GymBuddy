@@ -81,6 +81,7 @@ export async function getPlanDataAction(): Promise<ActionResult<PlanData>> {
     supabase
       .from("exercises")
       .select("id, name, category, primary_equipment, notes, is_custom")
+      .is("archived_at", null)
       .order("name", { ascending: true }),
   ]);
 
@@ -191,7 +192,7 @@ export async function createExerciseAction(input: ExerciseInput): Promise<Action
     .select("id, name, category, primary_equipment, notes, is_custom")
     .single();
   if (error) {
-    return { error: error.code === "23505" ? "You already have an exercise with that name" : "Couldn't create the exercise" };
+    return { error: error.code === "23505" ? "An exercise with that name already exists" : "Couldn't create the exercise" };
   }
 
   revalidatePath("/plan");
@@ -213,12 +214,11 @@ export async function updateExerciseAction(id: string, input: ExerciseInput): Pr
     .from("exercises")
     .update(parsed.data)
     .eq("id", parsedId.data)
-    .eq("owner_id", user.id)
     .select("id");
   if (error) {
-    return { error: error.code === "23505" ? "You already have an exercise with that name" : "Couldn't save the exercise" };
+    return { error: error.code === "23505" ? "An exercise with that name already exists" : "Couldn't save the exercise" };
   }
-  if (!data || data.length === 0) return { error: "Only your own exercises can be edited" };
+  if (!data || data.length === 0) return { error: "Exercise not found" };
 
   revalidatePath("/plan");
   return { success: true };
@@ -232,21 +232,8 @@ export async function deleteExerciseAction(id: string): Promise<ActionResult> {
   const user = await requireUser(supabase);
   if (!user) return { error: SIGN_IN_REQUIRED };
 
-  const { data, error } = await supabase
-    .from("exercises")
-    .delete()
-    .eq("id", parsed.data)
-    .eq("owner_id", user.id)
-    .select("id");
-  if (error) {
-    return {
-      error:
-        error.code === "23503"
-          ? "This exercise is part of your workout history, so it can't be deleted"
-          : "Couldn't delete the exercise",
-    };
-  }
-  if (!data || data.length === 0) return { error: "Only your own exercises can be deleted" };
+  const { error } = await supabase.rpc("delete_or_archive_exercise", { p_id: parsed.data });
+  if (error) return { error: "Couldn't delete the exercise" };
 
   revalidatePath("/plan");
   return { success: true };

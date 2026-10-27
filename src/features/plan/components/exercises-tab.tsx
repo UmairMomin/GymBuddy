@@ -72,10 +72,9 @@ export function ExercisesTab({ exercises }: { exercises: PlanExercise[] }) {
               <p className="text-xs text-zinc-400">
                 {labelize(e.category)}
                 {e.primary_equipment ? ` · ${labelize(e.primary_equipment)}` : ""}
-                {e.is_custom ? " · Yours" : ""}
               </p>
             </div>
-            {e.is_custom && (
+            {(
               <>
                 <Button variant="ghost" size="icon" aria-label={`Edit ${e.name}`} onClick={() => { setEditing(e); setFormOpen(true); }}>
                   <Pencil className="h-4 w-4" />

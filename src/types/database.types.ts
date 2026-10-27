@@ -96,6 +96,7 @@ export type Database = {
       }
       exercises: {
         Row: {
+          archived_at: string | null
           category: string
           created_at: string
           handle_type: string | null
@@ -107,6 +108,7 @@ export type Database = {
           primary_equipment: string | null
         }
         Insert: {
+          archived_at?: string | null
           category: string
           created_at?: string
           handle_type?: string | null
@@ -118,6 +120,7 @@ export type Database = {
           primary_equipment?: string | null
         }
         Update: {
+          archived_at?: string | null
           category?: string
           created_at?: string
           handle_type?: string | null
@@ -576,6 +579,7 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      delete_or_archive_exercise: { Args: { p_id: string }; Returns: string }
       find_profile_by_username: {
         Args: { p_username: string }
         Returns: {
