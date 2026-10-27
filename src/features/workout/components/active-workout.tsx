@@ -126,7 +126,6 @@ function SetRowView({
   onField,
   onBlur,
   onToggle,
-  readOnly,
 }: {
   row: Row;
   /** What the set badge shows. */
@@ -141,8 +140,6 @@ function SetRowView({
   onField: (field: "weight" | "reps", value: string) => void;
   onBlur: () => void;
   onToggle: () => void;
-  /** Your buddy's lane: shown, never edited from your screen. */
-  readOnly: boolean;
 }) {
   const partner = tone === "partner";
   // Accent per person: your theme accent, or the sky blue used for your buddy.
@@ -161,7 +158,6 @@ function SetRowView({
             aria-label={`${who} set ${number} ${field === "weight" ? `weight (${unit})` : "reps"}`}
             value={row[field]}
             placeholder={field === "weight" ? placeholder.weight : placeholder.reps}
-            readOnly={readOnly}
             onChange={(e) => onField(field, e.target.value)}
             onKeyDown={(e) => {
               // Desktop shortcut: Space in an empty field accepts the grey "last time" value. Never types a space.
@@ -185,7 +181,6 @@ function SetRowView({
         <button
           type="button"
           onClick={onToggle}
-          disabled={readOnly}
           aria-label={row.completed ? `${who} set ${number} logged, tap to undo` : `Log ${who} set ${number}`}
           aria-pressed={row.completed}
           className={cn(
@@ -338,7 +333,6 @@ function ExerciseCard({
                   onField={(field, value) => onField(row.id, field, value)}
                   onBlur={() => onBlurRow(row)}
                   onToggle={() => onToggleRow(laneTone, i)}
-                  readOnly={laneTone === "partner"}
                 />
               </li>
             ))}
@@ -362,7 +356,7 @@ function ExerciseCard({
             </button>
           )}
           {view === "sam" && (
-            <p className="mt-2 text-xs text-zinc-500">{partnerName}&rsquo;s sets. Only they can change these.</p>
+            <p className="mt-2 text-xs text-zinc-500">Correcting {partnerName}&rsquo;s sets. Edits are marked &ldquo;edited by you&rdquo;.</p>
           )}
 
           {view !== "sam" && (
