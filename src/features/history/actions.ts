@@ -26,7 +26,7 @@ export async function fetchMySetFacts(supabase: Supa, userId: string): Promise<S
     const { data, error } = await supabase
       .from("workout_sets")
       .select(
-        "weight_kg, reps, exercise_id, exercises!inner(name, category), workout_sessions!inner(id, name, started_at, ended_at, status)"
+        "weight_kg, reps, exercise_id, exercises!inner(name, category), workout_sessions!inner(id, name, routine_id, started_at, ended_at, status)"
       )
       .eq("user_id", userId)
       .eq("completed", true)
@@ -41,6 +41,7 @@ export async function fetchMySetFacts(supabase: Supa, userId: string): Promise<S
       facts.push({
         session_id: s.id,
         session_name: s.name,
+        is_freestyle: s.routine_id === null,
         started_at: s.started_at,
         ended_at: s.ended_at,
         exercise_id: r.exercise_id,

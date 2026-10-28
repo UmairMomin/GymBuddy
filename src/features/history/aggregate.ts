@@ -4,6 +4,8 @@ import { calculateEstimated1RM } from "@/features/history/calculations";
 export type SetFact = {
   session_id: string;
   session_name: string;
+  /** Started without a routine (the only sessions that can be renamed). */
+  is_freestyle?: boolean;
   started_at: string;
   ended_at: string | null;
   exercise_id: string;
@@ -26,6 +28,7 @@ export type ExerciseSummary = {
 export type SessionSummary = {
   id: string;
   name: string;
+  is_freestyle: boolean;
   started_at: string;
   ended_at: string | null;
   total_volume_kg: number;
@@ -63,6 +66,7 @@ export function summarize(facts: readonly SetFact[]): { sessions: SessionSummary
         head: {
           id: f.session_id,
           name: f.session_name,
+          is_freestyle: f.is_freestyle ?? false,
           started_at: f.started_at,
           ended_at: f.ended_at,
           total_volume_kg: 0,

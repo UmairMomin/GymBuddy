@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser, SIGN_IN_REQUIRED } from "@/lib/supabase/require-user";
-import { idSchema, saveSetSchema, type SaveSetInput } from "@/features/workout/schemas";
+import { idSchema, saveSetSchema, sessionNameSchema, type SaveSetInput } from "@/features/workout/schemas";
 import type { PlanExercise } from "@/features/plan/actions";
 import { sendInvitePush } from "@/features/notifications/push";
 
@@ -29,6 +29,8 @@ export type RecentSession = {
   /** My logged sets and total volume (kg), for the Home summary. */
   sets: number;
   volumeKg: number;
+  /** My completed work per exercise, in the order I did it. */
+  exercises: Array<{ name: string; sets: number; topWeightKg: number; topReps: number }>;
 };
 
 export type TodayData = {
@@ -98,6 +100,8 @@ export type WorkoutData = {
     startedAt: string;
     endedAt: string | null;
     isHost: boolean;
+    /** Started without a routine: the only kind whose name can be changed. */
+    isFreestyle: boolean;
   };
   exercises: SessionExerciseView[];
   catalog: PlanExercise[];
@@ -207,22 +211,32 @@ export async function getTodayAction(): Promise<ActionResult<TodayData>> {
     for (const o of others ?? []) withNames.set(o.session_id, people.get(o.user_id) ?? "Buddy");
   }
 
-  const stats = new Map<string, { sets: number; volumeKg: number }>();
+  const stats = new Map<string, { sets: number; volumeKg: number; byExercise: Map<string, RecentSession["exercises"][number]> }>();
   let unit: "kg" | "lb" = "kg";
   if (recentSessions.length > 0) {
     const [{ data: mine }, { data: prof }] = await Promise.all([
       supabase
         .from("workout_sets")
-        .select("session_id, weight_kg, reps")
+        .select("session_id, exercise_id, weight_kg, reps, exercises(name)")
         .in("session_id", recentSessions.map((s) => s.id))
         .eq("user_id", user.id)
-        .eq("completed", true),
+        .eq("completed", true)
+        .order("created_at", { ascending: true }),
       supabase.from("profiles").select("preferred_unit").eq("id", user.id).maybeSingle(),
     ]);
     for (const m of mine ?? []) {
-      const cur = stats.get(m.session_id) ?? { sets: 0, volumeKg: 0 };
+      const cur = stats.get(m.session_id) ?? { sets: 0, volumeKg: 0, byExercise: new Map() };
       cur.sets += 1;
       cur.volumeKg += Number(m.weight_kg) * m.reps;
+      const ex = Array.isArray(m.exercises) ? m.exercises[0] : m.exercises;
+      const w = Number(m.weight_kg);
+      const e = cur.byExercise.get(m.exercise_id) ?? { name: ex?.name ?? "Exercise", sets: 0, topWeightKg: 0, topReps: 0 };
+      e.sets += 1;
+      if (w > e.topWeightKg || (w === e.topWeightKg && m.reps > e.topReps)) {
+        e.topWeightKg = w;
+        e.topReps = m.reps;
+      }
+      cur.byExercise.set(m.exercise_id, e);
       stats.set(m.session_id, cur);
     }
     if (prof?.preferred_unit === "lb") unit = "lb";
@@ -245,6 +259,7 @@ export async function getTodayAction(): Promise<ActionResult<TodayData>> {
         myEndedAt: myEnd.get(s.id) ?? null,
         sets: stats.get(s.id)?.sets ?? 0,
         volumeKg: stats.get(s.id)?.volumeKg ?? 0,
+        exercises: [...(stats.get(s.id)?.byExercise.values() ?? [])],
       })),
     },
   };
@@ -323,7 +338,7 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
   const [sessionRes, listRes, setsRes, profileRes, catalogRes, partnerSetsRes, rosterRes, buddyRes] = await Promise.all([
     supabase
       .from("workout_sessions")
-      .select("id, name, status, started_at, ended_at, host_id")
+      .select("id, name, status, started_at, ended_at, host_id, routine_id")
       .eq("id", sessionId)
       .maybeSingle(),
     supabase
@@ -394,6 +409,7 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
         startedAt: session.started_at,
         endedAt: session.ended_at,
         isHost: session.host_id === user.id,
+        isFreestyle: session.routine_id === null,
       },
       exercises,
       catalog: catalogRes.data ?? [],
@@ -771,6 +787,23 @@ export async function finishMyWorkoutAction(sessionId: string): Promise<ActionRe
   if (error) return { error: rpcMessage(error) };
   revalidatePath("/");
   return { success: true };
+}
+
+/** Rename a freestyle workout (host or buddy; the database refuses routine-based ones). */
+export async function renameSessionAction(sessionId: string, name: string): Promise<ActionResult<{ name: string }>> {
+  const parsed = sessionNameSchema.safeParse(name);
+  if (!idSchema.safeParse(sessionId).success || !parsed.success) {
+    return { error: parsed.success ? "Workout not found" : parsed.error.issues[0].message };
+  }
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+
+  const { error } = await supabase.rpc("rename_session", { p_session_id: sessionId, p_name: parsed.data });
+  if (error) return { error: rpcMessage(error) };
+  revalidatePath("/");
+  revalidatePath("/history");
+  return { data: { name: parsed.data } };
 }
 
 /** Invite my buddy into a workout I already started. */

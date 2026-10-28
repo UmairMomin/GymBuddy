@@ -593,6 +593,10 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: undefined
       }
+      rename_session: {
+        Args: { p_name: string; p_session_id: string }
+        Returns: undefined
+      }
       has_accepted_buddy: { Args: { _user: string }; Returns: boolean }
       invite_buddy_to_session: {
         Args: { p_session_id: string }

@@ -21,3 +21,6 @@ export const saveSetSchema = z.object({
 export type SaveSetInput = z.infer<typeof saveSetSchema>;
 
 export const idSchema = z.string().uuid();
+
+/** Matches the 1–80 char check on workout_sessions.name. */
+export const sessionNameSchema = z.string().trim().min(1, "Give it a name").max(80, "Keep it under 80 characters");

@@ -37,6 +37,7 @@ import {
   writeOutbox,
   type OutboxEntry,
 } from "@/features/workout/outbox";
+import { RenameSession } from "@/features/workout/components/rename-session";
 import { reconcile, shouldAdopt } from "@/features/workout/sync";
 import { useSessionRealtime, type SetChange } from "@/features/workout/use-session-realtime";
 import { toCanonicalKg, toPreferredWeight } from "@/lib/units";
@@ -1050,7 +1051,10 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
             <ChevronLeft className="h-5 w-5" />
           </Link>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-[28px] font-extrabold uppercase leading-none tracking-wide">{session.name}</h1>
+            <div className="flex items-center gap-1">
+              <h1 className="truncate font-display text-[28px] font-extrabold uppercase leading-none tracking-wide">{session.name}</h1>
+              {session.isFreestyle && <RenameSession sessionId={session.id} name={session.name} />}
+            </div>
             <p className="mt-1 flex items-center gap-1.5 text-xs text-zinc-400">
               <span
                 aria-hidden
@@ -1347,6 +1351,12 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
           </div>
         }
       >
+        {session.isFreestyle && (
+          <div className="flex items-center justify-between gap-2 pt-2">
+            <p className="truncate font-semibold">{session.name}</p>
+            <RenameSession sessionId={session.id} name={session.name} />
+          </div>
+        )}
         <dl className="grid grid-cols-3 gap-2 pt-2 text-center">
           <div className="rounded-2xl bg-zinc-900 p-3">
             <dt className="text-[11px] font-semibold uppercase text-zinc-400">Time</dt>

@@ -3,10 +3,12 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Loader2, Play } from "lucide-react";
+import { Check, Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { startWorkoutAction, type TodayData } from "@/features/workout/actions";
+import { doneToday } from "@/features/workout/done-today";
+import { toPreferredWeight } from "@/lib/units";
 import { WEEKDAY_LABELS } from "@/features/plan/schemas";
 import { InstallPrompt } from "@/features/notifications/components/install-prompt";
 import { cn } from "@/lib/utils";
@@ -34,6 +36,9 @@ export function TodayView({ data }: { data: TodayData }) {
   const scheduledId = today >= 0 ? data.schedule[today] : null;
   const scheduled = scheduledId ? byId.get(scheduledId) ?? null : null;
   const hasRoutines = data.routines.length > 0;
+  // Anything finished today, routine or not, replaces the plan: the day's training is already done.
+  const done = today < 0 ? [] : doneToday(data.recent, new Date());
+  const fmt = (kg: number) => String(Math.round(toPreferredWeight(kg, data.unit) * 10) / 10);
 
   function start(routineId: string | null) {
     setError(null);
@@ -108,6 +113,40 @@ export function TodayView({ data }: { data: TodayData }) {
       ) : today < 0 ? (
         // Server render / pre-hydration: the device's weekday isn't known yet, so show a neutral placeholder.
         <section aria-busy="true" aria-label="Loading today's workout" className="h-72 animate-pulse rounded-3xl bg-zinc-900" />
+      ) : done.length > 0 ? (
+        <section aria-label="Today's summary" className="space-y-3">
+          {done.map((s) => {
+            const minutes = s.endedAt ? Math.max(1, Math.round((Date.parse(s.endedAt) - Date.parse(s.startedAt)) / 60000)) : null;
+            return (
+              <div key={s.id} className="space-y-3 rounded-3xl bg-zinc-900 p-5">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-emerald-400">
+                  <Check className="h-4 w-4" /> Done today
+                </p>
+                <Link href={`/session/${s.id}`} className="block">
+                  <p className="font-display text-4xl font-extrabold uppercase leading-none tracking-wide">{s.name}</p>
+                  <p className="mt-1.5 text-sm text-zinc-400">
+                    {s.sets} sets · {Math.round(toPreferredWeight(s.volumeKg, data.unit)).toLocaleString("en-US")} {data.unit}
+                    {minutes ? ` · ${minutes} min` : ""}
+                    {s.withName ? ` · with ${s.withName}` : ""}
+                  </p>
+                </Link>
+                <ul className="divide-y divide-zinc-800 border-y border-zinc-800">
+                  {s.exercises.map((e) => (
+                    <li key={e.name} className="flex justify-between gap-3 py-2.5 text-sm">
+                      <span className="min-w-0 truncate">{e.name}</span>
+                      <span className="shrink-0 tabular-nums text-zinc-400">
+                        {e.sets} sets · top {fmt(e.topWeightKg)} {data.unit} × {e.topReps}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+          <Button variant="secondary" className="w-full" onClick={() => setPickerOpen(true)}>
+            Start another workout
+          </Button>
+        </section>
       ) : (
         <section aria-label="Today's workout" className="space-y-4 rounded-3xl bg-zinc-900 p-5">
           {!hasRoutines ? (

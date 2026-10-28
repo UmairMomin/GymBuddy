@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import type { HistoryData } from "@/features/history/actions";
 import { HistoryCharts } from "@/features/history/components/history-charts";
 import { BodyMetricsCard } from "@/features/history/components/body-metrics-card";
+import { RenameSession } from "@/features/workout/components/rename-session";
 import { toPreferredWeight } from "@/lib/units";
 import { cn } from "@/lib/utils";
 
@@ -129,9 +130,12 @@ export function HistoryView({ data }: { data: HistoryData }) {
                             </li>
                           ))}
                         </ul>
-                        <Link href={`/session/${s.id}`} className="inline-block text-xs font-semibold text-emerald-400 underline-offset-4 hover:underline">
-                          View or correct sets
-                        </Link>
+                        <div className="flex items-center justify-between gap-2">
+                          <Link href={`/session/${s.id}`} className="inline-block text-xs font-semibold text-emerald-400 underline-offset-4 hover:underline">
+                            View or correct sets
+                          </Link>
+                          {s.is_freestyle && <RenameSession sessionId={s.id} name={s.name} />}
+                        </div>
                       </div>
                     )}
                   </li>
