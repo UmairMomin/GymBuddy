@@ -7,6 +7,7 @@ import { Check, ChevronDown, ChevronLeft, ChevronUp, Loader2, MoreHorizontal, Pl
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
+import { REFRESH_EVENT } from "@/components/layout/pull-to-refresh";
 import {
   addExerciseToWorkoutAction,
   addSessionRoutineAction,
@@ -445,7 +446,17 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const [finishOpen, setFinishOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [banner, setBanner] = React.useState<string | null>(null);
-  const [busy, startTransition] = React.useTransition();
+  const [busy, startRawTransition] = React.useTransition();
+  /** Like startTransition, but a failed request (expired session, dropped connection) shows a banner instead of crashing the page. */
+  function startTransition(fn: () => Promise<void>) {
+    startRawTransition(async () => {
+      try {
+        await fn();
+      } catch {
+        setBanner("Couldn't reach the server. Pull down to refresh, or reload if it keeps happening.");
+      }
+    });
+  }
   const [queuedCount, setQueuedCount] = React.useState(0);
 
   // Per-set write queue, in-flight set ids and latest known revisions: rapid taps never race or go stale.
@@ -935,6 +946,17 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     }
     for (const id of diff.remove) removeServerSet(id);
   }
+
+  // Pull-to-refresh: fetch the authoritative snapshot now instead of waiting for realtime.
+  const resyncRef = React.useRef(resync);
+  React.useEffect(() => {
+    resyncRef.current = resync;
+  });
+  React.useEffect(() => {
+    const onRefresh = () => void resyncRef.current().catch(() => setBanner("Couldn't refresh. Check your connection."));
+    window.addEventListener(REFRESH_EVENT, onRefresh);
+    return () => window.removeEventListener(REFRESH_EVENT, onRefresh);
+  }, []);
 
   const realtime = useSessionRealtime({
     sessionId: session.id,

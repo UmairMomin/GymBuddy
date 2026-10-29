@@ -8,6 +8,7 @@ import { UserMenu } from "@/components/layout/user-menu";
 import { ServiceWorkerRegister } from "@/features/notifications/components/service-worker-register";
 import { ActiveWorkoutBar } from "@/features/workout/components/active-workout-bar";
 import { InviteBanner } from "@/features/workout/components/invite-banner";
+import { PullToRefresh } from "@/components/layout/pull-to-refresh";
 import { NetworkStatusIndicator } from "@/components/layout/network-status-indicator";
 import { ThemeScript, ThemeSync } from "@/components/layout/theme-script";
 import "./globals.css";
@@ -62,6 +63,7 @@ export default function RootLayout({
         <ThemeSync />
         <ServiceWorkerRegister />
         <NetworkStatusIndicator />
+        <PullToRefresh />
         <Suspense fallback={null}>
           <InviteBanner />
         </Suspense>

@@ -179,3 +179,12 @@ html {
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* Pull-to-refresh barbell: one rep per cycle while refreshing. */
+@keyframes gb-rep {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gb-rep { animation: none !important; }
+}
