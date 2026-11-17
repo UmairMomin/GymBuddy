@@ -1718,25 +1718,6 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         )}
       </Sheet>
 
-      {/* discard (an in-app confirmation: the browser's confirm() dialog doesn't work in every context) */}
-      <Sheet
-        open={discardOpen}
-        onClose={() => setDiscardOpen(false)}
-        title="Discard workout?"
-        footer={
-          <div className="space-y-2">
-            <Button variant="ghost" className="w-full text-red-400" disabled={busy} onClick={discard}>
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Discard workout
-            </Button>
-            <Button variant="secondary" className="w-full" onClick={() => setDiscardOpen(false)}>
-              Keep it
-            </Button>
-          </div>
-        }
-      >
-        <p className="pt-2 text-sm text-zinc-300">Nothing from this workout will be kept. This can&rsquo;t be undone.</p>
-      </Sheet>
-
       {/* finish */}
       <Sheet
         open={finishOpen}
@@ -1789,6 +1770,25 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         {exercises.some((e) => e.rows.some((r) => !r.completed)) && (
           <p className="mt-3 text-sm text-amber-400">Some sets aren&rsquo;t logged yet. They won&rsquo;t be saved.</p>
         )}
+      </Sheet>
+
+      {/* discard: an in-app confirmation (the browser's confirm() is blocked in some contexts). Last in the page so it opens above the finish sheet. */}
+      <Sheet
+        open={discardOpen}
+        onClose={() => setDiscardOpen(false)}
+        title="Discard workout?"
+        footer={
+          <div className="space-y-2">
+            <Button variant="ghost" className="w-full text-red-400" disabled={busy} onClick={discard}>
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Discard workout
+            </Button>
+            <Button variant="secondary" className="w-full" onClick={() => setDiscardOpen(false)}>
+              Keep it
+            </Button>
+          </div>
+        }
+      >
+        <p className="pt-2 text-sm text-zinc-300">Nothing from this workout will be kept. This can&rsquo;t be undone.</p>
       </Sheet>
     </div>
   );
