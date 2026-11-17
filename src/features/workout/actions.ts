@@ -71,6 +71,8 @@ export type SessionExerciseView = {
   rep_max: number | null;
   sets: SetRow[];
   last: LastTimeSet[];
+  /** When `last` was done (ISO), or null if unknown. */
+  lastDate: string | null;
 };
 
 export type RosterEntry = {
@@ -303,28 +305,43 @@ export async function startWorkoutAction(
   return { data: { id: sessionId } };
 }
 
-/** "Last time": my completed sets from the most recent earlier session that included each exercise. */
+export type LastTime = { date: string | null; sets: LastTimeSet[] };
+
+/**
+ * "Last time": my completed working sets (never warm-ups) from the most recent earlier session that included
+ * each exercise, with that session's date. One lookup per exercise, so a busy recent history can't push an
+ * older exercise out of a shared row limit; it is found however long ago it was done.
+ */
 async function loadLastTime(supabase: Supa, userId: string, sessionId: string, exerciseIds: string[]) {
-  const lastByExercise = new Map<string, LastTimeSet[]>();
-  if (exerciseIds.length === 0) return lastByExercise;
-  const { data: history } = await supabase
-    .from("workout_sets")
-    .select("exercise_id, session_id, set_order, weight_kg, reps, updated_at")
-    .eq("user_id", userId)
-    .eq("completed", true)
-    .neq("session_id", sessionId)
-    .in("exercise_id", exerciseIds)
-    .order("updated_at", { ascending: false })
-    .limit(400);
-  const latestSession = new Map<string, string>();
-  for (const h of history ?? []) {
-    if (!latestSession.has(h.exercise_id)) latestSession.set(h.exercise_id, h.session_id);
-    if (latestSession.get(h.exercise_id) !== h.session_id) continue;
-    const arr = lastByExercise.get(h.exercise_id) ?? [];
-    arr.push({ set_order: h.set_order, weight_kg: h.weight_kg, reps: h.reps });
-    lastByExercise.set(h.exercise_id, arr);
-  }
-  for (const arr of lastByExercise.values()) arr.sort((a, b) => a.set_order - b.set_order);
+  const lastByExercise = new Map<string, LastTime>();
+  await Promise.all(
+    exerciseIds.map(async (exerciseId) => {
+      const { data: latest } = await supabase
+        .from("workout_sets")
+        .select("session_id, workout_sessions(started_at)")
+        .eq("user_id", userId)
+        .eq("exercise_id", exerciseId)
+        .eq("completed", true)
+        .neq("set_type", "warmup")
+        .neq("session_id", sessionId)
+        .order("updated_at", { ascending: false })
+        .limit(1);
+      const row = latest?.[0];
+      if (!row) return;
+      const { data: sets } = await supabase
+        .from("workout_sets")
+        .select("set_order, weight_kg, reps")
+        .eq("user_id", userId)
+        .eq("exercise_id", exerciseId)
+        .eq("session_id", row.session_id)
+        .eq("completed", true)
+        .neq("set_type", "warmup")
+        .order("set_order");
+      if (!sets || sets.length === 0) return;
+      const ws = Array.isArray(row.workout_sessions) ? row.workout_sessions[0] : row.workout_sessions;
+      lastByExercise.set(exerciseId, { date: ws?.started_at ?? null, sets });
+    })
+  );
   return lastByExercise;
 }
 
@@ -391,7 +408,8 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
       rep_min: l.rep_min,
       rep_max: l.rep_max,
       sets: sets.filter((s) => s.exercise_id === l.exercise_id),
-      last: lastByExercise.get(l.exercise_id) ?? [],
+      last: lastByExercise.get(l.exercise_id)?.sets ?? [],
+      lastDate: lastByExercise.get(l.exercise_id)?.date ?? null,
     };
   });
 
@@ -482,7 +500,7 @@ export async function deleteSetAction(setId: string): Promise<ActionResult> {
 export async function addExerciseToWorkoutAction(
   sessionId: string,
   exerciseId: string
-): Promise<ActionResult<{ id: string; position: number }>> {
+): Promise<ActionResult<{ id: string; position: number; last: LastTimeSet[]; lastDate: string | null }>> {
   if (!idSchema.safeParse(sessionId).success || !idSchema.safeParse(exerciseId).success) {
     return { error: "Invalid exercise" };
   }
@@ -505,7 +523,8 @@ export async function addExerciseToWorkoutAction(
     .select("id, position")
     .single();
   if (error || !data) return { error: "Couldn't add that exercise" };
-  return { data };
+  const lt = (await loadLastTime(supabase, user.id, sessionId, [exerciseId])).get(exerciseId);
+  return { data: { ...data, last: lt?.sets ?? [], lastDate: lt?.date ?? null } };
 }
 
 /** My own session_exercises row, or null. Never a buddy's. */
@@ -545,7 +564,7 @@ export async function removeExerciseFromWorkoutAction(sessionExerciseId: string)
 export async function swapExerciseInWorkoutAction(
   sessionExerciseId: string,
   newExerciseId: string
-): Promise<ActionResult<{ last: LastTimeSet[] }>> {
+): Promise<ActionResult<{ last: LastTimeSet[]; lastDate: string | null }>> {
   if (!idSchema.safeParse(sessionExerciseId).success || !idSchema.safeParse(newExerciseId).success) {
     return { error: "Invalid exercise" };
   }
@@ -575,8 +594,8 @@ export async function swapExerciseInWorkoutAction(
     .eq("user_id", user.id);
   if (error) return { error: "Couldn't swap that exercise" };
 
-  const last = (await loadLastTime(supabase, user.id, row.session_id, [newExerciseId])).get(newExerciseId) ?? [];
-  return { data: { last } };
+  const lt = (await loadLastTime(supabase, user.id, row.session_id, [newExerciseId])).get(newExerciseId);
+  return { data: { last: lt?.sets ?? [], lastDate: lt?.date ?? null } };
 }
 
 export async function finishWorkoutAction(sessionId: string): Promise<ActionResult> {

@@ -80,6 +80,13 @@ function safeStorage(): Storage | null {
 
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 
+/** "12 Sep", with the year added when it isn't this year. */
+function formatLastDate(iso: string): string {
+  const d = new Date(iso);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
+}
+
 function emptyRow(owner: string, order: number): Row {
   return { id: randomUUID(), owner, order, weight: "", reps: "", completed: false, saved: false, error: null, editedBy: null, queued: false };
 }
@@ -300,8 +307,8 @@ function ExerciseCard({
             {ex.name}
           </span>
           {ex.last.length > 0 ? (
-            <span className="block text-xs text-zinc-400">
-              Last time: {ex.last.map((l) => `${fmt(toPreferredWeight(l.weight_kg, unit))}×${l.reps}`).join(", ")} {unit}
+            <span className="block text-xs text-zinc-400" suppressHydrationWarning>
+              {ex.lastDate ? `${formatLastDate(ex.lastDate)}: ` : "Last time: "}{ex.last.map((l) => `${fmt(toPreferredWeight(l.weight_kg, unit))}×${l.reps}`).join(", ")} {unit}
             </span>
           ) : (
             reps && <span className="block text-xs text-zinc-400">Target: {ex.target_sets} × {reps}</span>
@@ -437,9 +444,10 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   /** Exercise being replaced while the picker is open (null = the picker adds). */
   const [swapId, setSwapId] = React.useState<string | null>(null);
   /** Pending destructive change on an exercise that has logged sets; newId set = swap, else remove. */
-  const [offers, setOffers] = React.useState<Array<{ exercise_id: string; name: string; byName: string }>>([]);
+  const [offers, setOffers] = React.useState<Array<{ exercise_id: string; name: string; byName: string; replaces?: string }>>([]);
   /** Buddy exercises already seen (or on my list at load): only genuinely new ones are offered. */
   const seenOffers = React.useRef<Set<string> | null>(null);
+  const prevTheirIds = React.useRef<string[]>([]);
   const [routineOffer, setRoutineOffer] = React.useState<string | null>(null);
   const [setChange, setSetChange] = React.useState<{ ex: ExerciseState; kind: "add" | "remove" } | null>(null);
   const [pendingChange, setPendingChange] = React.useState<{ ex: ExerciseState; newId?: string } | null>(null);
@@ -799,6 +807,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         rows,
         partnerRows: [],
         last: res.data.last,
+        lastDate: res.data.lastDate,
       };
       setExercises((prev) => prev.map((x) => (x.id === e.id ? swapped : x)));
       setFocusId(e.id);
@@ -865,7 +874,8 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         rep_max: null,
         rows,
         partnerRows: [],
-        last: [],
+        last: res.data.last,
+        lastDate: res.data.lastDate,
       };
       setExercises((prev) => [...prev, added]);
       setExpanded((prev) => new Set(prev).add(added.id));
@@ -929,8 +939,12 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       const mine = new Set(exercisesRef.current.map((x) => x.exercise_id));
       const fresh = sync.partnerExercises.filter((x) => !seen.has(x.exercise_id) && !mine.has(x.exercise_id));
       for (const id of theirIds) seen.add(id);
-      if (fresh.length > 0) setOffers((prev) => [...prev, ...fresh.filter((f) => !prev.some((o) => o.exercise_id === f.exercise_id))]);
+      // An exercise that vanished from their list as another appeared is a swap: offer to swap mine too.
+      const gone = prevTheirIds.current.filter((id) => !theirIds.includes(id) && mine.has(id));
+      const offered = fresh.map((f, i) => ({ ...f, replaces: gone[i] }));
+      if (offered.length > 0) setOffers((prev) => [...prev, ...offered.filter((f) => !prev.some((o) => o.exercise_id === f.exercise_id))]);
     }
+    prevTheirIds.current = theirIds;
 
     const serverSets = [...sync.mySets, ...sync.partnerSets];
     const local = exercisesRef.current.flatMap((e) => [...e.rows, ...e.partnerRows]).map((r) => ({
@@ -1138,7 +1152,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       {offers[0] && (
         <div role="status" className="mb-3 flex items-center gap-3 rounded-2xl bg-[#a8cbff]/15 px-3.5 py-2.5 text-sm text-zinc-100">
           <span className="min-w-0 flex-1">
-            {offers[0].byName.split(" ")[0]} added {offers[0].name}. Add it to your workout?
+            {offers[0].byName.split(" ")[0]} {offers[0].replaces ? "swapped to" : "added"} {offers[0].name}. {offers[0].replaces ? "Swap yours too?" : "Add it to your workout?"}
           </span>
           <Button size="sm" variant="ghost" onClick={() => setOffers((prev) => prev.slice(1))}>
             No thanks
@@ -1147,11 +1161,15 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
             size="sm"
             disabled={busy}
             onClick={() => {
-              addExercise(offers[0].exercise_id, offers[0].name);
+              const o = offers[0];
+              const mineEx = o.replaces ? exercises.find((x) => x.exercise_id === o.replaces) : undefined;
+              if (!mineEx) addExercise(o.exercise_id, o.name);
+              else if (mineEx.rows.some((r) => r.saved)) setPendingChange({ ex: mineEx, newId: o.exercise_id });
+              else swapExercise(mineEx, o.exercise_id);
               setOffers((prev) => prev.slice(1));
             }}
           >
-            Add
+            {offers[0].replaces ? "Swap" : "Add"}
           </Button>
         </div>
       )}
