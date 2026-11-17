@@ -11,6 +11,7 @@ import { InviteBanner } from "@/features/workout/components/invite-banner";
 import { PullToRefresh } from "@/components/layout/pull-to-refresh";
 import { NetworkStatusIndicator } from "@/components/layout/network-status-indicator";
 import { ThemeScript, ThemeSync } from "@/components/layout/theme-script";
+import { AppSplash, SplashScript } from "@/components/layout/app-splash";
 import "./globals.css";
 
 const barlow = Barlow({
@@ -56,10 +57,12 @@ export default function RootLayout({
     <html lang="en" data-mode="dark" data-accent="lime" suppressHydrationWarning>
       <head>
         <ThemeScript />
+        <SplashScript />
       </head>
       <body
         className={`${barlow.variable} ${barlowCondensed.variable} min-h-screen bg-zinc-950 text-zinc-50 antialiased selection:bg-emerald-500 selection:text-accent-ink`}
       >
+        <AppSplash />
         <ThemeSync />
         <ServiceWorkerRegister />
         <NetworkStatusIndicator />

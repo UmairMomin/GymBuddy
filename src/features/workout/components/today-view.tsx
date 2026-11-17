@@ -3,9 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Play } from "lucide-react";
+import { Check, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
+import { Barbell, LoadingScreen } from "@/components/ui/loaders";
 import { startWorkoutAction, type TodayData } from "@/features/workout/actions";
 import { doneToday } from "@/features/workout/done-today";
 import { toPreferredWeight } from "@/lib/units";
@@ -31,6 +32,8 @@ export function TodayView({ data }: { data: TodayData }) {
   const [withBuddy, setWithBuddy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
+  /** What is being started, for the waiting screen: a routine's name, or null for freestyle. */
+  const [starting, setStarting] = React.useState<string | null>(null);
 
   const byId = new Map(data.routines.map((r) => [r.id, r]));
   const scheduledId = today >= 0 ? data.schedule[today] : null;
@@ -42,6 +45,7 @@ export function TodayView({ data }: { data: TodayData }) {
 
   function start(routineId: string | null) {
     setError(null);
+    setStarting(routineId ? byId.get(routineId)?.name ?? null : null);
     startTransition(async () => {
       const res = await startWorkoutAction(routineId, Boolean(data.buddy) && withBuddy);
       if (res.error || !res.data) {
@@ -194,7 +198,7 @@ export function TodayView({ data }: { data: TodayData }) {
                 disabled={pending}
                 onClick={() => start(scheduled.id)}
               >
-                {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" />} Start workout
+                {pending ? <Barbell width={40} mono /> : <Play className="h-5 w-5" />} {pending ? "Starting…" : "Start workout"}
               </Button>
             </>
           ) : (
@@ -304,6 +308,15 @@ export function TodayView({ data }: { data: TodayData }) {
           </li>
         </ul>
       </Sheet>
+
+      {pending && (
+        <LoadingScreen
+          overlay
+          title={starting ? `Starting ${starting}` : "Starting workout"}
+          subtitle="Hang tight, getting your exercises ready"
+          steps={["Starting your workout", "Loading exercises"]}
+        />
+      )}
     </div>
   );
 }

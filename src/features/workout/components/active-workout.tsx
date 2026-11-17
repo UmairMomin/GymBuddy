@@ -7,6 +7,7 @@ import { ArrowRight, Check, ChevronDown, ChevronLeft, ChevronUp, Link2, Loader2,
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
+import { ExerciseSkeleton } from "@/components/ui/loaders";
 import { REFRESH_EVENT } from "@/components/layout/pull-to-refresh";
 import {
   addExerciseToWorkoutAction,
@@ -492,6 +493,8 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const [addOpen, setAddOpen] = React.useState(false);
   /** Exercise being replaced while the picker is open (null = the picker adds). */
   const [swapId, setSwapId] = React.useState<string | null>(null);
+  /** The picker row being added (or swapped in) right now: shown as busy until the server answers. */
+  const [working, setWorking] = React.useState<{ id: string; kind: "add" | "swap" } | null>(null);
   /** Exercise (session-exercise id) being linked into a superset, and the partner picked so far. */
   const [linkFor, setLinkFor] = React.useState<string | null>(null);
   const [linkPick, setLinkPick] = React.useState<string | null>(null);
@@ -888,8 +891,10 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   }
 
   function swapExercise(e: ExerciseState, newExerciseId: string) {
+    setWorking({ id: newExerciseId, kind: "swap" });
     startTransition(async () => {
       const res = await swapExerciseInWorkoutAction(e.id, newExerciseId);
+      setWorking(null);
       if (res.error || !res.data) {
         setBanner(res.error ?? "Couldn't swap that exercise");
         return;
@@ -1007,8 +1012,10 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   }
 
   function addExercise(exerciseId: string, fallbackName = "Exercise") {
+    setWorking({ id: exerciseId, kind: "add" });
     startTransition(async () => {
       const res = await addExerciseToWorkoutAction(session.id, exerciseId);
+      setWorking(null);
       if (res.error || !res.data) {
         setBanner(res.error ?? "Couldn't add that exercise");
         return;
@@ -1424,6 +1431,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
                 </div>
               )
             )}
+            {working?.kind === "add" && <ExerciseSkeleton name={data.catalog.find((c) => c.id === working.id)?.name ?? "exercise"} />}
             <Button variant="outline" className="h-12 w-full border-dashed text-zinc-400" onClick={() => setAddOpen(true)}>
               <Plus className="h-4 w-4" /> Add exercise
             </Button>
@@ -1522,7 +1530,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         title="Superset with"
         footer={
           <Button className="w-full" disabled={busy || !linkPick} onClick={linkSuperset}>
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Link as superset
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />} {busy ? "Linking…" : "Link as superset"}
           </Button>
         }
       >
@@ -1634,12 +1642,20 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
               <li key={c.id}>
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || working !== null}
+                  aria-busy={working?.id === c.id}
                   onClick={() => pickExercise(c.id)}
-                  className="flex min-h-[52px] w-full items-center justify-between rounded-xl bg-zinc-900 px-3 text-left hover:bg-zinc-800"
+                  className={cn(
+                    "flex min-h-[52px] w-full items-center gap-2.5 rounded-xl px-3 text-left transition-opacity",
+                    working?.id === c.id ? "animate-pulse border border-emerald-500 bg-emerald-500/10" : "bg-zinc-900 hover:bg-zinc-800",
+                    working && working.id !== c.id && "opacity-40"
+                  )}
                 >
-                  <span className="text-sm font-semibold">{c.name}</span>
-                  <span className="text-xs capitalize text-zinc-400">{c.category.replace("_", " ")}</span>
+                  {working?.id === c.id && <Loader2 aria-hidden className="h-5 w-5 shrink-0 animate-spin text-emerald-400" />}
+                  <span className="flex-1 text-sm font-semibold">{c.name}</span>
+                  <span className={cn("text-xs capitalize", working?.id === c.id ? "font-semibold text-emerald-400" : "text-zinc-400")}>
+                    {working?.id === c.id ? (working.kind === "swap" ? "Swapping…" : "Adding…") : c.category.replace("_", " ")}
+                  </span>
                 </button>
               </li>
             ))}

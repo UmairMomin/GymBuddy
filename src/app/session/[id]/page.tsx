@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { LoadingScreen } from "@/components/ui/loaders";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
 import { getSessionAccessAction, getWorkoutAction } from "@/features/workout/actions";
@@ -41,12 +41,7 @@ async function WorkoutContent({ params }: { params: Promise<{ id: string }> }) {
 export default function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   return (
     <Suspense
-      fallback={
-        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-400" />
-          <p className="text-xs text-zinc-500">Loading workout...</p>
-        </div>
-      }
+      fallback={<LoadingScreen title="Loading workout" subtitle="Getting your exercises ready" />}
     >
       <WorkoutContent params={params} />
     </Suspense>

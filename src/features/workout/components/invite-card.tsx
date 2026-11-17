@@ -6,18 +6,24 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { declineWorkoutAction, joinWorkoutAction } from "@/features/workout/actions";
+import { JoiningScreen } from "@/features/workout/components/joining-screen";
 
 /** Full-page confirmation shown to an invited buddy. Nothing about the workout is revealed until they join. */
 export function InviteCard({ sessionId, name, hostName }: { sessionId: string; name: string; hostName: string }) {
   const router = useRouter();
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
+  const [joining, setJoining] = React.useState(false);
 
   function join() {
     setError(null);
+    setJoining(true);
     startTransition(async () => {
       const res = await joinWorkoutAction(sessionId);
-      if (res.error) return setError(res.error);
+      if (res.error) {
+        setJoining(false);
+        return setError(res.error);
+      }
       router.refresh(); // the page now resolves to the live workout
     });
   }
@@ -42,7 +48,7 @@ export function InviteCard({ sessionId, name, hostName }: { sessionId: string; n
       {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
       <div className="flex w-full flex-col gap-2">
         <Button size="lg" disabled={pending} onClick={join}>
-          {pending && <Loader2 className="h-4 w-4 animate-spin" />} Join workout
+          {pending && joining && <Loader2 className="h-4 w-4 animate-spin" />} {pending && joining ? "Joining…" : "Join workout"}
         </Button>
         <Button variant="secondary" disabled={pending} onClick={decline}>
           Decline
@@ -51,6 +57,7 @@ export function InviteCard({ sessionId, name, hostName }: { sessionId: string; n
           Decide later
         </Link>
       </div>
+      {pending && joining && <JoiningScreen hostName={hostName} />}
     </div>
   );
 }

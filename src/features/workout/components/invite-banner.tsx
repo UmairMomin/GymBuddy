@@ -10,6 +10,7 @@ import {
   joinWorkoutAction,
   type PendingInvite,
 } from "@/features/workout/actions";
+import { JoiningScreen } from "@/features/workout/components/joining-screen";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -23,6 +24,8 @@ export function InviteBanner() {
   const [invites, setInvites] = React.useState<PendingInvite[]>([]);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  /** The invite being joined: the waiting screen stays up until the workout page has taken over. */
+  const [joining, setJoining] = React.useState<PendingInvite | null>(null);
   const hidden = pathname === "/login";
 
   React.useEffect(() => {
@@ -68,17 +71,22 @@ export function InviteBanner() {
     };
   }, [hidden]);
 
+  const joiningScreen =
+    joining && pathname !== `/session/${joining.sessionId}` ? <JoiningScreen hostName={joining.hostName} /> : null;
+
   // Already inside that workout's invite screen: it has its own Join / Decline.
   const visible = invites.filter((i) => pathname !== `/session/${i.sessionId}`);
-  if (hidden || visible.length === 0) return null;
+  if (hidden || visible.length === 0) return joiningScreen;
   const invite = visible[0];
 
   async function join() {
     setBusyId(invite.sessionId);
     setError(null);
+    setJoining(invite);
     const res = await joinWorkoutAction(invite.sessionId);
     setBusyId(null);
     if (res.error) {
+      setJoining(null);
       setError(res.error);
       return;
     }
@@ -99,6 +107,7 @@ export function InviteBanner() {
   }
 
   return (
+    <>
     <div
       role="alert"
       className="fixed inset-x-3 top-[calc(0.5rem+env(safe-area-inset-top))] z-[55] mx-auto max-w-xl rounded-2xl border border-[#a8cbff]/60 bg-zinc-900 p-3 shadow-2xl"
@@ -110,12 +119,14 @@ export function InviteBanner() {
       {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
       <div className="mt-2 flex gap-2">
         <Button className="flex-1" disabled={busyId !== null} onClick={join}>
-          {busyId === invite.sessionId && <Loader2 className="h-4 w-4 animate-spin" />} Join
+          {busyId === invite.sessionId && <Loader2 className="h-4 w-4 animate-spin" />} {busyId === invite.sessionId ? "Joining…" : "Join"}
         </Button>
         <Button variant="secondary" className="flex-1" disabled={busyId !== null} onClick={decline}>
           Decline
         </Button>
       </div>
     </div>
+    {joiningScreen}
+    </>
   );
 }
