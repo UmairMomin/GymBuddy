@@ -509,6 +509,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const [setChange, setSetChange] = React.useState<{ ex: ExerciseState; kind: "add" | "remove" } | null>(null);
   const [pendingChange, setPendingChange] = React.useState<{ ex: ExerciseState; newId?: string } | null>(null);
   const [finishOpen, setFinishOpen] = React.useState(false);
+  const [discardOpen, setDiscardOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [banner, setBanner] = React.useState<string | null>(null);
   const [busy, startRawTransition] = React.useTransition();
@@ -1175,9 +1176,9 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   }
 
   function discard() {
-    if (!confirm("Discard this workout? Nothing from it will be kept.")) return;
     startTransition(async () => {
       const res = await discardWorkoutAction(session.id);
+      setDiscardOpen(false);
       if (res.error) {
         setBanner(res.error);
         return;
@@ -1717,6 +1718,25 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         )}
       </Sheet>
 
+      {/* discard (an in-app confirmation: the browser's confirm() dialog doesn't work in every context) */}
+      <Sheet
+        open={discardOpen}
+        onClose={() => setDiscardOpen(false)}
+        title="Discard workout?"
+        footer={
+          <div className="space-y-2">
+            <Button variant="ghost" className="w-full text-red-400" disabled={busy} onClick={discard}>
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Discard workout
+            </Button>
+            <Button variant="secondary" className="w-full" onClick={() => setDiscardOpen(false)}>
+              Keep it
+            </Button>
+          </div>
+        }
+      >
+        <p className="pt-2 text-sm text-zinc-300">Nothing from this workout will be kept. This can&rsquo;t be undone.</p>
+      </Sheet>
+
       {/* finish */}
       <Sheet
         open={finishOpen}
@@ -1733,7 +1753,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
               </Button>
             )}
             {session.isHost && (
-              <Button variant="ghost" className="w-full text-red-400" disabled={busy} onClick={discard}>
+              <Button variant="ghost" className="w-full text-red-400" disabled={busy} onClick={() => setDiscardOpen(true)}>
                 Discard workout
               </Button>
             )}
