@@ -172,7 +172,7 @@ function SetRowView({
     : { text: "text-emerald-400", border: "border-emerald-500", fill: "border-emerald-500 bg-emerald-500 text-accent-ink", ring: "focus-visible:ring-emerald-400" };
 
   return (
-    <div data-row={row.id}>
+    <div>
       <div className="grid grid-cols-[34px_minmax(0,1fr)_minmax(0,1fr)_48px] items-center gap-2">
         <button
           type="button"
@@ -389,7 +389,7 @@ function ExerciseCard({
           </div>
           <ol className="space-y-1.5">
             {lane.map((row, i) => (
-              <li key={row.id}>
+              <li key={row.id} data-set={`${ex.id}:${i}`}>
                 <SetRowView
                   row={row}
                   label={laneLabels[i]}
@@ -795,9 +795,9 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     persist(e, filled, { weight, reps, completed: true });
     // In a superset, bring the other exercise's next set into view.
     const other = e.superset_group ? exercisesRef.current.find((x) => x.superset_group === e.superset_group && x.id !== e.id) : null;
-    const nextRow = other?.rows.find((r) => !r.completed && !isWarmup(r.set_type));
-    if (nextRow) {
-      window.setTimeout(() => document.querySelector(`[data-row="${nextRow.id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 50);
+    const nextAt = other ? other.rows.findIndex((r) => !r.completed && !isWarmup(r.set_type)) : -1;
+    if (other && nextAt >= 0) {
+      window.setTimeout(() => document.querySelector(`[data-set="${other.id}:${nextAt}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 50);
     }
   }
 
