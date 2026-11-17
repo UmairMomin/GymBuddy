@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, ChevronLeft, ChevronUp, Loader2, MoreHorizontal, Plus, Search, Share2, UserPlus } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronUp, Loader2, MoreHorizontal, Plus, Search, Share2, TrendingUp, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
@@ -39,6 +39,7 @@ import {
   type OutboxEntry,
 } from "@/features/workout/outbox";
 import { SET_TYPE_INFO, isWarmup, setLabels, toSetType, workingIndex, type SetType } from "@/features/workout/set-types";
+import { overloadHint, type OverloadHint } from "@/features/workout/overload";
 import { SET_TYPES } from "@/features/workout/schemas";
 import { RenameSession } from "@/features/workout/components/rename-session";
 import { reconcile, shouldAdopt } from "@/features/workout/sync";
@@ -258,6 +259,7 @@ function ExerciseCard({
   onOpenBuddy,
   onAddSet,
   onPickType,
+  hint,
 }: {
   ex: ExerciseState;
   open: boolean;
@@ -276,6 +278,7 @@ function ExerciseCard({
   onOpenBuddy: () => void;
   onAddSet: () => void;
   onPickType: (row: Row) => void;
+  hint: OverloadHint | null;
 }) {
   const myWork = ex.rows.filter((r) => !isWarmup(r.set_type));
   const theirWork = ex.partnerRows.filter((r) => !isWarmup(r.set_type));
@@ -357,6 +360,15 @@ function ExerciseCard({
       </div>
 
         <>
+          {hint && view !== "sam" && mineDone < myWork.length && (
+            <p role="status" className="mb-2.5 flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-3 py-2 text-[13px] text-zinc-100">
+              <TrendingUp aria-hidden className="h-4 w-4 shrink-0 text-emerald-400" />
+              <span className="min-w-0 flex-1">
+                Try <b className="font-bold text-emerald-400">{fmt(hint.weight)} {unit} × {hint.reps}</b>
+              </span>
+              <span className="shrink-0 text-[11px] text-zinc-400">{hint.reason}</span>
+            </p>
+          )}
           <div className="mb-1 grid grid-cols-[34px_minmax(0,1fr)_minmax(0,1fr)_48px] gap-2 text-center text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
             <span>Set</span>
             <span>{unitLabel}</span>
@@ -526,11 +538,25 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     );
   }
 
+  /** Today's suggestion for an exercise, from last time's working sets and its rep range. */
+  function hintFor(e: ExerciseState): OverloadHint | null {
+    return overloadHint({
+      last: e.last,
+      repMin: e.rep_min,
+      repMax: e.rep_max,
+      equipment: data.catalog.find((c) => c.id === e.exercise_id)?.primary_equipment ?? null,
+      unit,
+    });
+  }
+
   function placeholderFor(e: ExerciseState, lane: Lane, index: number): { weight: string; reps: string } {
     const lanes = lane === "me" ? e.rows : e.partnerRows;
     const types = lanes.map((r) => r.set_type);
     const warm = isWarmup(types[index] ?? "normal");
     if (lane === "me" && !warm) {
+      // The suggestion is today's plan for every working set; without one, fall back to last time.
+      const hint = hintFor(e);
+      if (hint) return { weight: fmt(hint.weight), reps: String(hint.reps) };
       // "Last time" holds working sets only, so line it up by working-set position (warm-ups don't shift it).
       const l = e.last[workingIndex(types, index)] ?? e.last[e.last.length - 1];
       if (l) return { weight: l.weight_kg > 0 ? fmt(toPreferredWeight(l.weight_kg, unit)) : "", reps: l.reps > 0 ? String(l.reps) : "" };
@@ -1263,6 +1289,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
                 onOpenBuddy={() => setFilter("sam")}
                 onAddSet={() => requestSetChange(e, "add")}
                 onPickType={(row) => setTypePick({ exId: e.id, rowId: row.id })}
+                hint={hintFor(e)}
               />
             ))}
             <Button variant="outline" className="h-12 w-full border-dashed text-zinc-400" onClick={() => setAddOpen(true)}>
