@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, ChevronLeft, ChevronUp, Loader2, MoreHorizontal, Plus, Search, Share2, TrendingUp, UserPlus } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, ChevronLeft, ChevronUp, Link2, Loader2, MoreHorizontal, Plus, Search, Share2, TrendingUp, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
@@ -18,6 +18,8 @@ import {
   finishWorkoutAction,
   getSessionSyncAction,
   inviteBuddyAction,
+  linkSupersetAction,
+  unlinkSupersetAction,
   saveSetAction,
   removeExerciseFromWorkoutAction,
   swapExerciseInWorkoutAction,
@@ -39,6 +41,7 @@ import {
   type OutboxEntry,
 } from "@/features/workout/outbox";
 import { SET_TYPE_INFO, isWarmup, setLabels, toSetType, workingIndex, type SetType } from "@/features/workout/set-types";
+import { groupBySuperset, memberTag, nextUp, roundOf } from "@/features/workout/supersets";
 import { overloadHint, type OverloadHint } from "@/features/workout/overload";
 import { SET_TYPES } from "@/features/workout/schemas";
 import { RenameSession } from "@/features/workout/components/rename-session";
@@ -169,7 +172,7 @@ function SetRowView({
     : { text: "text-emerald-400", border: "border-emerald-500", fill: "border-emerald-500 bg-emerald-500 text-accent-ink", ring: "focus-visible:ring-emerald-400" };
 
   return (
-    <div>
+    <div data-row={row.id}>
       <div className="grid grid-cols-[34px_minmax(0,1fr)_minmax(0,1fr)_48px] items-center gap-2">
         <button
           type="button"
@@ -260,6 +263,8 @@ function ExerciseCard({
   onAddSet,
   onPickType,
   hint,
+  tag,
+  locked,
 }: {
   ex: ExerciseState;
   open: boolean;
@@ -279,6 +284,10 @@ function ExerciseCard({
   onAddSet: () => void;
   onPickType: (row: Row) => void;
   hint: OverloadHint | null;
+  /** "A1", "A2": set when the exercise is in a superset. */
+  tag?: string;
+  /** Superset members stay open so you can alternate between them. */
+  locked?: boolean;
 }) {
   const myWork = ex.rows.filter((r) => !isWarmup(r.set_type));
   const theirWork = ex.partnerRows.filter((r) => !isWarmup(r.set_type));
@@ -327,9 +336,10 @@ function ExerciseCard({
   return (
     <section aria-label={ex.name} className="rounded-[18px] border border-zinc-800 bg-zinc-900 p-3.5">
       <div className="mb-2.5 flex items-start justify-between gap-2">
-        <button type="button" aria-expanded onClick={onToggle} className="min-w-0 flex-1 py-1 text-left">
+        <button type="button" aria-expanded disabled={locked} onClick={onToggle} className="min-w-0 flex-1 py-1 text-left">
           <span className={cn("block break-words font-display text-xl font-bold uppercase leading-[1.1] tracking-normal", allDone && "text-emerald-400")}>
             {allDone && <Check aria-label="All sets done" className="mr-1.5 inline h-5 w-5 stroke-[3.5] align-[-3px]" />}
+            {tag && <span className="mr-1.5 text-emerald-400">{tag}</span>}
             {ex.name}
           </span>
           {ex.last.length > 0 ? (
@@ -353,9 +363,11 @@ function ExerciseCard({
           <Button variant="ghost" size="icon" aria-label={`Options for ${ex.name}`} onClick={onMenu}>
             <MoreHorizontal className="h-5 w-5 text-zinc-400" />
           </Button>
-          <Button variant="ghost" size="icon" aria-label={`Collapse ${ex.name}`} aria-expanded onClick={onToggle}>
-            <ChevronUp className="h-5 w-5 text-zinc-400" />
-          </Button>
+          {!locked && (
+            <Button variant="ghost" size="icon" aria-label={`Collapse ${ex.name}`} aria-expanded onClick={onToggle}>
+              <ChevronUp className="h-5 w-5 text-zinc-400" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -480,6 +492,12 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const [addOpen, setAddOpen] = React.useState(false);
   /** Exercise being replaced while the picker is open (null = the picker adds). */
   const [swapId, setSwapId] = React.useState<string | null>(null);
+  /** Exercise (session-exercise id) being linked into a superset, and the partner picked so far. */
+  const [linkFor, setLinkFor] = React.useState<string | null>(null);
+  const [linkPick, setLinkPick] = React.useState<string | null>(null);
+  const [linkQuery, setLinkQuery] = React.useState("");
+  /** The superset whose options sheet is open (its group id). */
+  const [groupMenu, setGroupMenu] = React.useState<string | null>(null);
   /** The set whose type is being chosen. */
   const [typePick, setTypePick] = React.useState<{ exId: string; rowId: string } | null>(null);
   /** Pending destructive change on an exercise that has logged sets; newId set = swap, else remove. */
@@ -775,6 +793,12 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     const filled = { ...row, weight: row.weight || ph.weight, reps: row.reps || ph.reps, completed: true, error: null };
     patchRow(e.id, row.id, filled);
     persist(e, filled, { weight, reps, completed: true });
+    // In a superset, bring the other exercise's next set into view.
+    const other = e.superset_group ? exercisesRef.current.find((x) => x.superset_group === e.superset_group && x.id !== e.id) : null;
+    const nextRow = other?.rows.find((r) => !r.completed && !isWarmup(r.set_type));
+    if (nextRow) {
+      window.setTimeout(() => document.querySelector(`[data-row="${nextRow.id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 50);
+    }
   }
 
   function setRowType(type: SetType) {
@@ -851,7 +875,12 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         return;
       }
       purgeOutbox(e.exercise_id);
-      setExercises((prev) => prev.filter((x) => x.id !== e.id));
+      setExercises((prev) => {
+        const rest = prev.filter((x) => x.id !== e.id);
+        // A superset left with one exercise is no longer one (the server did the same).
+        const left = e.superset_group ? rest.filter((x) => x.superset_group === e.superset_group) : [];
+        return left.length === 1 ? rest.map((x) => (x.id === left[0].id ? { ...x, superset_group: null } : x)) : rest;
+      });
       setPendingChange(null);
       setMenuId(null);
     });
@@ -883,6 +912,60 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       setSwapId(null);
       setAddOpen(false);
       setQuery("");
+    });
+  }
+
+  function linkSuperset() {
+    const from = exercises.find((x) => x.id === linkFor);
+    if (!from || !linkPick) return;
+    startTransition(async () => {
+      const res = await linkSupersetAction(from.id, linkPick);
+      if (res.error || !res.data) {
+        setBanner(res.error ?? "Couldn't link those exercises");
+        return;
+      }
+      const { groups, added } = res.data;
+      const meta = added ? data.catalog.find((c) => c.id === added.exercise_id) : null;
+      setExercises((prev) => {
+        const next = prev.map((x) => ({ ...x, superset_group: groups.find((g) => g.id === x.id)?.superset_group ?? x.superset_group }));
+        if (!added || next.some((x) => x.id === added.id)) return next;
+        const group = groups.find((g) => g.id === added.id)?.superset_group ?? null;
+        return [
+          ...next,
+          {
+            id: added.id,
+            exercise_id: added.exercise_id,
+            name: meta?.name ?? "Exercise",
+            category: meta?.category ?? "other",
+            position: added.position,
+            target_sets: 3,
+            rep_min: null,
+            rep_max: null,
+            rows: padLane([], userId, 3),
+            partnerRows: [],
+            last: added.last,
+            lastDate: added.lastDate,
+            superset_group: group,
+          },
+        ];
+      });
+      setLinkFor(null);
+      setLinkPick(null);
+      setLinkQuery("");
+    });
+  }
+
+  function unlinkSuperset(group: string) {
+    const member = exercises.find((x) => x.superset_group === group);
+    if (!member) return;
+    startTransition(async () => {
+      const res = await unlinkSupersetAction(member.id);
+      if (res.error || !res.data) {
+        setBanner(res.error ?? "Couldn't remove that superset");
+        return;
+      }
+      setExercises((prev) => prev.map((x) => (x.superset_group === group ? { ...x, superset_group: null } : x)));
+      setGroupMenu(null);
     });
   }
 
@@ -944,6 +1027,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         partnerRows: [],
         last: res.data.last,
         lastDate: res.data.lastDate,
+        superset_group: null,
       };
       setExercises((prev) => [...prev, added]);
       setExpanded((prev) => new Set(prev).add(added.id));
@@ -1122,6 +1206,37 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     return data.catalog.filter((c) => !used.has(c.id) && (q === "" || c.name.toLowerCase().includes(q)));
   }, [data.catalog, exercises, query]);
 
+  const progressOf = (e: ExerciseState) => {
+    const work = e.rows.filter((r) => !isWarmup(r.set_type));
+    return { id: e.id, done: work.filter((r) => r.completed).length, total: work.length };
+  };
+  const blocks = groupBySuperset(exercises);
+  const renderCard = (e: ExerciseState, tag: string | undefined) => (
+      <ExerciseCard
+        key={e.id}
+        ex={e}
+        open={tag ? true : expanded.has(e.id)}
+        view={view}
+        unit={unit}
+        unitLabel={unitLabel}
+        hasBuddy={Boolean(partner)}
+        partnerName={partnerName}
+        partnerFirst={partnerFirst}
+        placeholderFor={(lane, index) => placeholderFor(e, lane, index)}
+        onToggle={() => toggleOpen(e.id)}
+        onMenu={() => setMenuId(e.id)}
+        onField={(rowId, field, value) => patchRow(e.id, rowId, { [field]: value, error: null })}
+        onBlurRow={(row) => commitEdit(e, row)}
+        onToggleRow={(lane, index) => toggleComplete(e, lane, index)}
+        onOpenBuddy={() => setFilter("sam")}
+        onAddSet={() => requestSetChange(e, "add")}
+        onPickType={(row) => setTypePick({ exId: e.id, rowId: row.id })}
+        hint={hintFor(e)}
+        tag={tag}
+        locked={Boolean(tag)}
+      />
+  );
+
   const unitLabel = unit.toUpperCase();
   const partnerName = partner?.name ?? "";
   const partnerFirst = partnerName.split(" ")[0] || partnerName;
@@ -1269,29 +1384,45 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       ) : (
         <>
           <div className="space-y-3">
-            {exercises.map((e) => (
-              <ExerciseCard
-                key={e.id}
-                ex={e}
-                open={expanded.has(e.id)}
-                view={view}
-                unit={unit}
-                unitLabel={unitLabel}
-                hasBuddy={Boolean(partner)}
-                partnerName={partnerName}
-                partnerFirst={partnerFirst}
-                placeholderFor={(lane, index) => placeholderFor(e, lane, index)}
-                onToggle={() => toggleOpen(e.id)}
-                onMenu={() => setMenuId(e.id)}
-                onField={(rowId, field, value) => patchRow(e.id, rowId, { [field]: value, error: null })}
-                onBlurRow={(row) => commitEdit(e, row)}
-                onToggleRow={(lane, index) => toggleComplete(e, lane, index)}
-                onOpenBuddy={() => setFilter("sam")}
-                onAddSet={() => requestSetChange(e, "add")}
-                onPickType={(row) => setTypePick({ exId: e.id, rowId: row.id })}
-                hint={hintFor(e)}
-              />
-            ))}
+            {blocks.map((b) =>
+              b.group === null ? (
+                renderCard(b.members[0], undefined)
+              ) : (
+                <div key={b.group} role="group" aria-label={`Superset ${b.letter}`} className="space-y-2 rounded-[22px] border border-emerald-500/60 p-2">
+                  <div className="flex h-7 items-center gap-2 px-1.5">
+                    <Link2 aria-hidden className="h-4 w-4 text-emerald-400" />
+                    <span className="font-display text-[15px] font-bold uppercase tracking-[0.08em] text-emerald-400">Superset {b.letter}</span>
+                    {view !== "sam" && (
+                      <span className="ml-auto text-xs text-zinc-400">
+                        Round {roundOf(b.members.map(progressOf)).round} of {roundOf(b.members.map(progressOf)).of}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      aria-label={`Options for superset ${b.letter}`}
+                      onClick={() => setGroupMenu(b.group)}
+                      className={cn("flex h-8 w-8 items-center justify-center text-zinc-400", view === "sam" && "ml-auto")}
+                    >
+                      <MoreHorizontal className="h-[18px] w-[18px]" />
+                    </button>
+                  </div>
+                  {b.members.map((m, i) => renderCard(m, memberTag(b.letter ?? "A", i)))}
+                  {live && view !== "sam" && (() => {
+                    const up = nextUp(b.members.map(progressOf));
+                    const who = up ? b.members.findIndex((m) => m.id === up.id) : -1;
+                    if (!up || who < 0) return null;
+                    return (
+                      <p role="status" className="flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-3 py-2 text-[13px] text-zinc-100">
+                        <ArrowRight aria-hidden className="h-4 w-4 shrink-0 text-emerald-400" />
+                        <span>
+                          Up next: <b className="font-bold text-emerald-400">{memberTag(b.letter ?? "A", who)} {b.members[who].name}, set {up.set}</b>
+                        </span>
+                      </p>
+                    );
+                  })()}
+                </div>
+              )
+            )}
             <Button variant="outline" className="h-12 w-full border-dashed text-zinc-400" onClick={() => setAddOpen(true)}>
               <Plus className="h-4 w-4" /> Add exercise
             </Button>
@@ -1357,6 +1488,18 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
             >
               Swap exercise
             </Button>
+            <Button
+              variant="secondary"
+              className="w-full justify-start"
+              onClick={() => {
+                setMenuId(null);
+                setLinkQuery("");
+                setLinkPick(null);
+                setLinkFor(menuEx.id);
+              }}
+            >
+              <Link2 className="h-4 w-4 text-emerald-400" /> Link as superset
+            </Button>
             <Button variant="secondary" className="w-full justify-start" disabled={(view === "sam" ? menuEx.partnerRows : menuEx.rows).length <= 1} onClick={() => requestSetChange(menuEx, "remove")}>
               Remove last set
             </Button>
@@ -1369,6 +1512,105 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
             </Button>
           </div>
         )}
+      </Sheet>
+
+      {/* link as superset: any exercise from the catalog */}
+      <Sheet
+        open={linkFor !== null}
+        onClose={() => setLinkFor(null)}
+        title="Superset with"
+        footer={
+          <Button className="w-full" disabled={busy || !linkPick} onClick={linkSuperset}>
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Link as superset
+          </Button>
+        }
+      >
+        {(() => {
+          const from = exercises.find((x) => x.id === linkFor);
+          if (!from) return null;
+          const q = linkQuery.trim().toLowerCase();
+          const options = data.catalog.filter((c) => c.id !== from.exercise_id && (q === "" || c.name.toLowerCase().includes(q)));
+          const inWorkout = new Map(exercises.map((x) => [x.exercise_id, x]));
+          return (
+            <div className="space-y-3 pt-1">
+              <p className="text-[13px] leading-snug text-zinc-400">
+                Pick any exercise to pair with {from.name}. One not in this workout yet is added for you. An exercise is in one superset at a time, so picking one that is already paired moves it here.
+              </p>
+              <div className="relative">
+                <Search aria-hidden className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-zinc-500" />
+                <label htmlFor="link-search" className="sr-only">Search exercises</label>
+                <Input id="link-search" value={linkQuery} onChange={(e) => setLinkQuery(e.target.value)} placeholder="Search exercises" className="pl-9" />
+              </div>
+              <ul className="space-y-1.5">
+                {options.slice(0, 60).map((c) => {
+                  const existing = inWorkout.get(c.id);
+                  const note = !existing
+                    ? "Will be added"
+                    : existing.superset_group && existing.superset_group !== from.superset_group
+                      ? "Already paired"
+                      : "In workout";
+                  const picked = linkPick === c.id;
+                  return (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        aria-pressed={picked}
+                        onClick={() => setLinkPick(c.id)}
+                        className={cn(
+                          "flex min-h-[52px] w-full items-center gap-3 rounded-xl border px-3 text-left",
+                          picked ? "border-emerald-500 bg-emerald-500/10" : "border-zinc-800 bg-zinc-900"
+                        )}
+                      >
+                        <span
+                          aria-hidden
+                          className={cn("flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full", picked ? "bg-emerald-500 text-accent-ink" : "border-2 border-zinc-600")}
+                        >
+                          {picked && <Check className="h-3.5 w-3.5 stroke-[4]" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[15px] font-semibold">{c.name}</span>
+                          <span className="block text-xs capitalize text-zinc-400">{c.category.replace("_", " ")}{c.primary_equipment ? ` · ${c.primary_equipment}` : ""}</span>
+                        </span>
+                        <span className={cn("text-[11px] font-semibold", note === "Will be added" ? "text-emerald-400" : "text-zinc-400")}>{note}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+                {options.length === 0 && <li className="p-4 text-center text-sm text-zinc-400">No matching exercises.</li>}
+              </ul>
+            </div>
+          );
+        })()}
+      </Sheet>
+
+      {/* superset options: change the partner or remove it */}
+      <Sheet open={groupMenu !== null} onClose={() => setGroupMenu(null)} title={`Superset ${blocks.find((b) => b.group === groupMenu)?.letter ?? ""}`}>
+        {(() => {
+          const block = blocks.find((b) => b.group === groupMenu);
+          if (!block || block.members.length < 2) return null;
+          const [first, second] = block.members;
+          return (
+            <div className="space-y-2 pt-1">
+              <p className="mb-1 text-[13px] text-zinc-400">{first.name} and {second.name}</p>
+              <Button
+                variant="secondary"
+                className="w-full justify-start"
+                onClick={() => {
+                  setGroupMenu(null);
+                  setLinkQuery("");
+                  setLinkPick(null);
+                  setLinkFor(first.id);
+                }}
+              >
+                Change {second.name} to another exercise
+              </Button>
+              <Button variant="secondary" className="w-full justify-start text-red-400" disabled={busy} onClick={() => block.group && unlinkSuperset(block.group)}>
+                Remove superset
+              </Button>
+              <p className="text-xs leading-snug text-zinc-500">Removing keeps both exercises and all logged sets. They just stop alternating.</p>
+            </div>
+          );
+        })()}
       </Sheet>
 
       {/* add exercise */}

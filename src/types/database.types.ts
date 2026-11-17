@@ -286,6 +286,7 @@ export type Database = {
           rep_min: number | null
           session_id: string
           skipped: boolean
+          superset_group: string | null
           target_sets: number
           user_id: string
         }
@@ -298,6 +299,7 @@ export type Database = {
           rep_min?: number | null
           session_id: string
           skipped?: boolean
+          superset_group?: string | null
           target_sets?: number
           user_id: string
         }
@@ -310,6 +312,7 @@ export type Database = {
           rep_min?: number | null
           session_id?: string
           skipped?: boolean
+          superset_group?: string | null
           target_sets?: number
           user_id?: string
         }

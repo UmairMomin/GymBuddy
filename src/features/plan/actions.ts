@@ -25,6 +25,7 @@ export type PlanRoutineItem = {
   target_sets: number;
   rep_min: number;
   rep_max: number;
+  superset_group: string | null;
 };
 
 export type PlanRoutine = {
@@ -60,6 +61,7 @@ function toItems(json: unknown): PlanRoutineItem[] {
         target_sets: r.target_sets ?? 3,
         rep_min: r.rep_min ?? 8,
         rep_max: r.rep_max ?? 12,
+        superset_group: typeof r.superset_group === "string" ? r.superset_group : null,
       };
     })
     .filter((x): x is PlanRoutineItem => x !== null)

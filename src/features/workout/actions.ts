@@ -73,6 +73,8 @@ export type SessionExerciseView = {
   last: LastTimeSet[];
   /** When `last` was done (ISO), or null if unknown. */
   lastDate: string | null;
+  /** Shared by the two exercises of a superset; null when not in one. */
+  superset_group: string | null;
 };
 
 export type RosterEntry = {
@@ -361,7 +363,7 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
       .maybeSingle(),
     supabase
       .from("session_exercises")
-      .select("id, exercise_id, position, target_sets, rep_min, rep_max, exercises(name, category)")
+      .select("id, exercise_id, position, target_sets, rep_min, rep_max, superset_group, exercises(name, category)")
       .eq("session_id", sessionId)
       .eq("user_id", user.id)
       .order("position", { ascending: true }),
@@ -411,6 +413,7 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
       sets: sets.filter((s) => s.exercise_id === l.exercise_id),
       last: lastByExercise.get(l.exercise_id)?.sets ?? [],
       lastDate: lastByExercise.get(l.exercise_id)?.date ?? null,
+      superset_group: l.superset_group,
     };
   });
 
@@ -532,7 +535,7 @@ export async function addExerciseToWorkoutAction(
 async function getMyExerciseRow(supabase: Supa, userId: string, sessionExerciseId: string) {
   const { data } = await supabase
     .from("session_exercises")
-    .select("id, session_id, exercise_id")
+    .select("id, session_id, exercise_id, superset_group")
     .eq("id", sessionExerciseId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -558,7 +561,109 @@ export async function removeExerciseFromWorkoutAction(sessionExerciseId: string)
   if (sets.error) return { error: "Couldn't remove that exercise" };
   const { error } = await supabase.from("session_exercises").delete().eq("id", row.id).eq("user_id", user.id);
   if (error) return { error: "Couldn't remove that exercise" };
+  // A superset left with one exercise is no longer a superset.
+  if (row.superset_group) await clearLoneGroup(supabase, user.id, row.session_id, row.superset_group);
   return { success: true };
+}
+
+/** If a superset group is down to a single exercise, clear it so that exercise isn't left half-linked. */
+async function clearLoneGroup(supabase: Supa, userId: string, sessionId: string, group: string) {
+  const { data } = await supabase
+    .from("session_exercises")
+    .select("id")
+    .eq("session_id", sessionId)
+    .eq("user_id", userId)
+    .eq("superset_group", group);
+  if (data && data.length === 1) {
+    await supabase.from("session_exercises").update({ superset_group: null }).eq("id", data[0].id).eq("user_id", userId);
+  }
+}
+
+export type SupersetLinkResult = {
+  /** The group of every exercise on my list afterwards, by session-exercise id. */
+  groups: Array<{ id: string; superset_group: string | null }>;
+  /** Set when the partner wasn't in the workout yet and was added. */
+  added: { id: string; exercise_id: string; position: number; last: LastTimeSet[]; lastDate: string | null } | null;
+};
+
+/**
+ * Pair one exercise on my list with another (any exercise; it is added when it isn't in the workout yet).
+ * An exercise is in one superset at a time, so a new pair takes both out of any pair they were in.
+ * shortcut: separate statements, not one transaction; a failure part-way leaves some exercises unpaired, never a
+ * broken pair. Move into an RPC if that ever matters.
+ */
+export async function linkSupersetAction(
+  sessionExerciseId: string,
+  partnerExerciseId: string
+): Promise<ActionResult<SupersetLinkResult>> {
+  if (!idSchema.safeParse(sessionExerciseId).success || !idSchema.safeParse(partnerExerciseId).success) {
+    return { error: "Invalid exercise" };
+  }
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+
+  const mine = await getMyExerciseRow(supabase, user.id, sessionExerciseId);
+  if (!mine) return { error: "That exercise no longer exists" };
+  if (mine.exercise_id === partnerExerciseId) return { error: "Pick a different exercise" };
+
+  const { data: list, error: listError } = await supabase
+    .from("session_exercises")
+    .select("id, exercise_id, position, superset_group")
+    .eq("session_id", mine.session_id)
+    .eq("user_id", user.id);
+  if (listError || !list) return { error: "Couldn't link those exercises" };
+  const rows = [...list];
+
+  let added: SupersetLinkResult["added"] = null;
+  let partner = rows.find((r) => r.exercise_id === partnerExerciseId);
+  if (!partner) {
+    const position = Math.max(-1, ...rows.map((r) => r.position)) + 1;
+    const { data: inserted, error } = await supabase
+      .from("session_exercises")
+      .insert({ session_id: mine.session_id, user_id: user.id, exercise_id: partnerExerciseId, position, target_sets: 3 })
+      .select("id, exercise_id, position, superset_group")
+      .single();
+    if (error || !inserted) return { error: "Couldn't add that exercise" };
+    partner = inserted;
+    rows.push(inserted);
+    const lt = (await loadLastTime(supabase, user.id, mine.session_id, [partnerExerciseId])).get(partnerExerciseId);
+    added = { id: inserted.id, exercise_id: inserted.exercise_id, position: inserted.position, last: lt?.sets ?? [], lastDate: lt?.date ?? null };
+  }
+
+  const group = crypto.randomUUID();
+  const pair = [mine.id, partner.id];
+  const oldGroups = [...new Set(rows.filter((r) => pair.includes(r.id) && r.superset_group).map((r) => r.superset_group as string))];
+  const { error } = await supabase.from("session_exercises").update({ superset_group: group }).in("id", pair).eq("user_id", user.id);
+  if (error) return { error: "Couldn't link those exercises" };
+  for (const r of rows) if (pair.includes(r.id)) r.superset_group = group;
+  for (const g of oldGroups) {
+    await clearLoneGroup(supabase, user.id, mine.session_id, g);
+    const left = rows.filter((r) => r.superset_group === g);
+    if (left.length === 1) left[0].superset_group = null;
+  }
+  return { data: { groups: rows.map((r) => ({ id: r.id, superset_group: r.superset_group })), added } };
+}
+
+/** Remove the superset an exercise is in; both exercises and all their sets stay. */
+export async function unlinkSupersetAction(sessionExerciseId: string): Promise<ActionResult<{ ids: string[] }>> {
+  if (!idSchema.safeParse(sessionExerciseId).success) return { error: "Invalid exercise" };
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+
+  const row = await getMyExerciseRow(supabase, user.id, sessionExerciseId);
+  if (!row) return { error: "That exercise no longer exists" };
+  if (!row.superset_group) return { data: { ids: [] } };
+  const { data, error } = await supabase
+    .from("session_exercises")
+    .update({ superset_group: null })
+    .eq("session_id", row.session_id)
+    .eq("user_id", user.id)
+    .eq("superset_group", row.superset_group)
+    .select("id");
+  if (error) return { error: "Couldn't remove that superset" };
+  return { data: { ids: (data ?? []).map((d) => d.id) } };
 }
 
 /** Replace one exercise with another in the same slot (position, target sets and rep range stay). */
@@ -873,7 +978,7 @@ async function matchSessionToMyRoutines(supabase: Supa, userId: string, sessionI
   const [{ data: list }, { data: routines }, { data: sess }] = await Promise.all([
     supabase
       .from("session_exercises")
-      .select("exercise_id, position, target_sets, rep_min, rep_max")
+      .select("exercise_id, position, target_sets, rep_min, rep_max, superset_group")
       .eq("session_id", sessionId)
       .eq("user_id", userId)
       .eq("skipped", false)
