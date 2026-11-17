@@ -30,6 +30,7 @@ export async function fetchMySetFacts(supabase: Supa, userId: string): Promise<S
       )
       .eq("user_id", userId)
       .eq("completed", true)
+      .neq("set_type", "warmup")
       .eq("workout_sessions.status", "completed")
       .order("created_at", { ascending: false })
       .range(page * PAGE, page * PAGE + PAGE - 1);

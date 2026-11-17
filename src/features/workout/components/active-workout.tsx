@@ -38,6 +38,8 @@ import {
   writeOutbox,
   type OutboxEntry,
 } from "@/features/workout/outbox";
+import { SET_TYPE_INFO, isWarmup, setLabels, toSetType, workingIndex, type SetType } from "@/features/workout/set-types";
+import { SET_TYPES } from "@/features/workout/schemas";
 import { RenameSession } from "@/features/workout/components/rename-session";
 import { reconcile, shouldAdopt } from "@/features/workout/sync";
 import { useSessionRealtime, type SetChange } from "@/features/workout/use-session-realtime";
@@ -53,6 +55,7 @@ type Row = {
   weight: string;
   reps: string;
   completed: boolean;
+  set_type: SetType;
   /** Has been written to the server at least once. */
   saved: boolean;
   error: string | null;
@@ -88,7 +91,7 @@ function formatLastDate(iso: string): string {
 }
 
 function emptyRow(owner: string, order: number): Row {
-  return { id: randomUUID(), owner, order, weight: "", reps: "", completed: false, saved: false, error: null, editedBy: null, queued: false };
+  return { id: randomUUID(), owner, order, set_type: "normal", weight: "", reps: "", completed: false, saved: false, error: null, editedBy: null, queued: false };
 }
 
 function rowFromSet(set: SetRow, unit: "kg" | "lb", me: string, nameOf: (id: string) => string): Row {
@@ -96,6 +99,7 @@ function rowFromSet(set: SetRow, unit: "kg" | "lb", me: string, nameOf: (id: str
     id: set.id,
     owner: set.user_id,
     order: set.set_order,
+    set_type: toSetType(set.set_type),
     weight: set.weight_kg > 0 ? fmt(toPreferredWeight(set.weight_kg, unit)) : "",
     reps: set.reps > 0 ? String(set.reps) : "",
     completed: set.completed,
@@ -129,6 +133,8 @@ function parseReps(raw: string): number | null {
 function SetRowView({
   row,
   label,
+  setType,
+  onPickType,
   number,
   tone,
   unit,
@@ -142,6 +148,8 @@ function SetRowView({
   row: Row;
   /** What the set badge shows. */
   label: string;
+  setType: SetType;
+  onPickType: () => void;
   /** The set's number, for assistive tech and tests. */
   number: number;
   tone: Lane;
@@ -162,7 +170,17 @@ function SetRowView({
   return (
     <div>
       <div className="grid grid-cols-[34px_minmax(0,1fr)_minmax(0,1fr)_48px] items-center gap-2">
-        <span className={cn("text-center font-display text-lg font-bold", isNext ? accent.text : "text-zinc-400")}>{label}</span>
+        <button
+          type="button"
+          onClick={onPickType}
+          aria-label={`${who} set ${number}, ${SET_TYPE_INFO[setType].name}. Change set type`}
+          className={cn(
+            "h-[46px] text-center font-display text-lg font-bold",
+            setType !== "normal" ? SET_TYPE_INFO[setType].text : isNext ? accent.text : "text-zinc-400"
+          )}
+        >
+          {label}
+        </button>
         {(["weight", "reps"] as const).map((field) => (
           <input
             key={field}
@@ -239,6 +257,7 @@ function ExerciseCard({
   onToggleRow,
   onOpenBuddy,
   onAddSet,
+  onPickType,
 }: {
   ex: ExerciseState;
   open: boolean;
@@ -256,18 +275,21 @@ function ExerciseCard({
   onToggleRow: (lane: Lane, index: number) => void;
   onOpenBuddy: () => void;
   onAddSet: () => void;
+  onPickType: (row: Row) => void;
 }) {
-  const mineDone = ex.rows.filter((r) => r.completed).length;
-  const theirDone = ex.partnerRows.filter((r) => r.completed);
+  const myWork = ex.rows.filter((r) => !isWarmup(r.set_type));
+  const theirWork = ex.partnerRows.filter((r) => !isWarmup(r.set_type));
+  const mineDone = myWork.filter((r) => r.completed).length;
+  const theirDone = theirWork.filter((r) => r.completed);
   const reps = repRange(ex);
-  const allDone = ex.rows.length > 0 && mineDone === ex.rows.length;
+  const allDone = myWork.length > 0 && mineDone === myWork.length;
 
   if (!open) {
     const parts = [
       `${ex.target_sets} sets`,
       reps ? `${reps} reps` : "",
-      `you ${mineDone}/${ex.rows.length}`,
-      hasBuddy ? `${partnerFirst} ${theirDone.length}/${ex.partnerRows.length}` : "",
+      `you ${mineDone}/${myWork.length}`,
+      hasBuddy ? `${partnerFirst} ${theirDone.length}/${theirWork.length}` : "",
     ].filter(Boolean);
     return (
       <section aria-label={ex.name}>
@@ -296,7 +318,8 @@ function ExerciseCard({
   const lane = view === "sam" ? ex.partnerRows : ex.rows;
   const laneTone: Lane = view === "sam" ? "partner" : "me";
   const laneWho = view === "sam" ? `${partnerName}'s` : "Your";
-  const pill = view === "sam" ? `${theirDone.length} / ${ex.partnerRows.length} sets` : `${mineDone} / ${ex.rows.length} sets`;
+  const laneLabels = setLabels(lane.map((r) => r.set_type));
+  const pill = view === "sam" ? `${theirDone.length} / ${theirWork.length} sets` : `${mineDone} / ${myWork.length} sets`;
 
   return (
     <section aria-label={ex.name} className="rounded-[18px] border border-zinc-800 bg-zinc-900 p-3.5">
@@ -345,7 +368,9 @@ function ExerciseCard({
               <li key={row.id}>
                 <SetRowView
                   row={row}
-                  label={String(i + 1)}
+                  label={laneLabels[i]}
+                  setType={row.set_type}
+                  onPickType={() => onPickType(row)}
                   number={i + 1}
                   tone={laneTone}
                   unit={unit}
@@ -373,7 +398,7 @@ function ExerciseCard({
                 {theirDone.length > 0 ? theirDone.map((r) => `${r.weight}×${r.reps}`).join(" · ") : "No sets yet"}
               </span>
               <span className="shrink-0 font-semibold text-sky-300">
-                {theirDone.length} / {ex.partnerRows.length}
+                {theirDone.length} / {theirWork.length}
               </span>
             </button>
           )}
@@ -391,7 +416,7 @@ function ExerciseCard({
 
 /** First exercise that still has sets to log (the one to start open); falls back to the first. */
 function firstOpenId(list: SessionExerciseView[]): string | null {
-  const next = list.find((e) => e.sets.filter((s) => s.completed).length < e.target_sets) ?? list[0];
+  const next = list.find((e) => e.sets.filter((s) => s.completed && s.set_type !== "warmup").length < e.target_sets) ?? list[0];
   return next?.id ?? null;
 }
 
@@ -443,6 +468,8 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const [addOpen, setAddOpen] = React.useState(false);
   /** Exercise being replaced while the picker is open (null = the picker adds). */
   const [swapId, setSwapId] = React.useState<string | null>(null);
+  /** The set whose type is being chosen. */
+  const [typePick, setTypePick] = React.useState<{ exId: string; rowId: string } | null>(null);
   /** Pending destructive change on an exercise that has logged sets; newId set = swap, else remove. */
   const [offers, setOffers] = React.useState<Array<{ exercise_id: string; name: string; byName: string; replaces?: string }>>([]);
   /** Buddy exercises already seen (or on my list at load): only genuinely new ones are offered. */
@@ -500,12 +527,16 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   }
 
   function placeholderFor(e: ExerciseState, lane: Lane, index: number): { weight: string; reps: string } {
-    if (lane === "me") {
-      const l = e.last[index] ?? e.last[e.last.length - 1];
+    const lanes = lane === "me" ? e.rows : e.partnerRows;
+    const types = lanes.map((r) => r.set_type);
+    const warm = isWarmup(types[index] ?? "normal");
+    if (lane === "me" && !warm) {
+      // "Last time" holds working sets only, so line it up by working-set position (warm-ups don't shift it).
+      const l = e.last[workingIndex(types, index)] ?? e.last[e.last.length - 1];
       if (l) return { weight: l.weight_kg > 0 ? fmt(toPreferredWeight(l.weight_kg, unit)) : "", reps: l.reps > 0 ? String(l.reps) : "" };
     }
-    const lanes = lane === "me" ? e.rows : e.partnerRows;
-    const prev = lanes[index - 1];
+    // A warm-up follows the row above it; a working set follows the last working set, never a warm-up.
+    const prev = warm ? lanes[index - 1] : lanes.slice(0, index).reverse().find((r) => !isWarmup(r.set_type));
     return { weight: prev?.weight ?? "", reps: prev?.reps ?? "" };
   }
 
@@ -550,7 +581,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       exercise_id: e.exercise_id,
       user_id: row.owner,
       set_order: row.order,
-      set_type: "normal" as const,
+      set_type: row.set_type,
       weight_kg: toCanonicalKg(values.weight, unit),
       reps: values.reps,
       completed: values.completed,
@@ -642,6 +673,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
           const out = [...rows];
           for (const x of mine.filter((m) => m.user_id === owner)) {
             const patch = {
+              set_type: x.set_type,
               weight: x.weight_kg > 0 ? fmt(toPreferredWeight(x.weight_kg, unit)) : "",
               reps: x.reps > 0 ? String(x.reps) : "",
               completed: x.completed,
@@ -717,6 +749,16 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     const filled = { ...row, weight: row.weight || ph.weight, reps: row.reps || ph.reps, completed: true, error: null };
     patchRow(e.id, row.id, filled);
     persist(e, filled, { weight, reps, completed: true });
+  }
+
+  function setRowType(type: SetType) {
+    const pick = typePick;
+    setTypePick(null);
+    const e = exercises.find((x) => x.id === pick?.exId);
+    const row = [...(e?.rows ?? []), ...(e?.partnerRows ?? [])].find((r) => r.id === pick?.rowId);
+    if (!e || !row || row.set_type === type) return;
+    patchRow(e.id, row.id, { set_type: type });
+    commitEdit(e, { ...row, set_type: type });
   }
 
   function commitEdit(e: ExerciseState, row: Row) {
@@ -1035,12 +1077,12 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
     });
   }
 
-  const completedSets = exercises.reduce((n, e) => n + e.rows.filter((r) => r.completed).length, 0);
+  const completedSets = exercises.reduce((n, e) => n + e.rows.filter((r) => r.completed && !isWarmup(r.set_type)).length, 0);
   const volumeKg = exercises.reduce(
     (sum, e) =>
       sum +
       e.rows.reduce((s, r) => {
-        if (!r.completed) return s;
+        if (!r.completed || isWarmup(r.set_type)) return s;
         const w = parseWeight(r.weight);
         const reps = parseReps(r.reps);
         return w !== null && reps !== null ? s + toCanonicalKg(w, unit) * reps : s;
@@ -1220,6 +1262,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
                 onToggleRow={(lane, index) => toggleComplete(e, lane, index)}
                 onOpenBuddy={() => setFilter("sam")}
                 onAddSet={() => requestSetChange(e, "add")}
+                onPickType={(row) => setTypePick({ exId: e.id, rowId: row.id })}
               />
             ))}
             <Button variant="outline" className="h-12 w-full border-dashed text-zinc-400" onClick={() => setAddOpen(true)}>
@@ -1234,6 +1277,43 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
           Finish workout
         </Button>
       )}
+
+      {/* set type */}
+      <Sheet open={typePick !== null} onClose={() => setTypePick(null)} title="Set type">
+        {(() => {
+          const e = exercises.find((x) => x.id === typePick?.exId);
+          const row = [...(e?.rows ?? []), ...(e?.partnerRows ?? [])].find((r) => r.id === typePick?.rowId);
+          if (!e || !row) return null;
+          const lane = e.rows.some((r) => r.id === row.id) ? e.rows : e.partnerRows;
+          const label = setLabels(lane.map((r) => r.set_type))[lane.findIndex((r) => r.id === row.id)];
+          return (
+            <div className="space-y-2 pt-1">
+              <p className="mb-1 text-[13px] text-zinc-400">{e.name}, set {label}</p>
+              {SET_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  aria-pressed={row.set_type === t}
+                  onClick={() => setRowType(t)}
+                  className={cn(
+                    "flex min-h-[60px] w-full items-center gap-3 rounded-xl border px-3 py-2 text-left",
+                    row.set_type === t ? "border-emerald-500 bg-emerald-500/10" : "border-zinc-800 bg-zinc-900"
+                  )}
+                >
+                  <span className={cn("w-[34px] shrink-0 text-center font-display text-[22px] font-bold", SET_TYPE_INFO[t].text || "text-zinc-400")}>
+                    {t === "normal" ? "1" : SET_TYPE_INFO[t].letter}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] font-semibold">{SET_TYPE_INFO[t].name}</span>
+                    <span className="block text-xs text-zinc-400">{SET_TYPE_INFO[t].blurb}</span>
+                  </span>
+                  {row.set_type === t && <Check aria-hidden className="h-5 w-5 stroke-[3] text-emerald-400" />}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+      </Sheet>
 
       {/* exercise menu */}
       <Sheet open={menuId !== null} onClose={() => setMenuId(null)} title={menuEx?.name ?? "Exercise"}>

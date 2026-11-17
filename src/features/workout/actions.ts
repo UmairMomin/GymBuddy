@@ -223,6 +223,7 @@ export async function getTodayAction(): Promise<ActionResult<TodayData>> {
         .in("session_id", recentSessions.map((s) => s.id))
         .eq("user_id", user.id)
         .eq("completed", true)
+        .neq("set_type", "warmup")
         .order("created_at", { ascending: true }),
       supabase.from("profiles").select("preferred_unit").eq("id", user.id).maybeSingle(),
     ]);
