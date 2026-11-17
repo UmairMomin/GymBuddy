@@ -1,7 +1,8 @@
 import { Suspense } from "react";
+import { PageLoader } from "@/components/ui/loaders";
 import { connection } from "next/server";
 import Link from "next/link";
-import { Loader2, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
 import { getBuddyOverviewAction } from "@/features/buddy/actions";
@@ -41,12 +42,7 @@ async function BuddyContent() {
 export default function BuddyPage() {
   return (
     <Suspense
-      fallback={
-        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-400" />
-          <p className="text-xs text-zinc-500">Loading...</p>
-        </div>
-      }
+      fallback={<PageLoader label="Loading your buddy…" />}
     >
       <BuddyContent />
     </Suspense>

@@ -44,21 +44,20 @@ export function Barbell({
 }
 
 /**
- * A waiting screen that says what is happening: the barbell, a title, optional steps that tick off, and a
- * "taking longer than usual" note if it drags. `overlay` covers the whole app (for a tap that starts work);
- * otherwise it fills the page (a route's loading state). `children` sit between the barbell and the title.
+ * A full-screen wait that says what is happening: the barbell, a title, optional steps that tick off, and a
+ * "taking longer than usual" note if it drags. It covers the whole app, header and nav included, so a
+ * hand-off from one of these to the next (Starting → the workout route loading) never flashes the page.
+ * `children` sit between the barbell and the title.
  */
 export function LoadingScreen({
   title,
   subtitle,
   steps = [],
-  overlay = false,
   children,
 }: {
   title: string;
   subtitle?: string;
   steps?: string[];
-  overlay?: boolean;
   children?: React.ReactNode;
 }) {
   const [active, setActive] = React.useState(0);
@@ -78,10 +77,7 @@ export function LoadingScreen({
     <div
       role="status"
       aria-live="polite"
-      className={cn(
-        "flex flex-col items-center justify-center px-8 text-center",
-        overlay ? "fixed inset-0 z-[70] bg-zinc-950 pt-safe" : "min-h-[60vh]"
-      )}
+      className="fixed inset-0 z-[70] flex flex-col items-center justify-center bg-zinc-950 px-8 pt-safe text-center"
     >
       <div className="relative flex h-[110px] w-[200px] justify-center">
         <Barbell />
@@ -111,6 +107,16 @@ export function LoadingScreen({
       <p className={cn("mt-8 max-w-[260px] text-[13px] leading-snug text-zinc-400 transition-opacity duration-500", slow ? "opacity-100" : "opacity-0")}>
         Taking longer than usual. Check your connection; it will keep trying.
       </p>
+    </div>
+  );
+}
+
+/** A route's in-page loading state (header and nav stay): the lifting barbell and what is loading. */
+export function PageLoader({ label }: { label: string }) {
+  return (
+    <div role="status" className="flex min-h-[50vh] flex-col items-center justify-center gap-4">
+      <Barbell width={120} />
+      <p className="text-xs text-zinc-500">{label}</p>
     </div>
   );
 }

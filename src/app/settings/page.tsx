@@ -1,9 +1,10 @@
 import { Suspense } from "react";
+import { PageLoader } from "@/components/ui/loaders";
 import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserProfileSettingsAction } from "@/features/auth/settings-actions";
 import { SettingsView } from "@/features/auth/components/settings-view";
-import { Lock, Loader2 } from "lucide-react";
+import { Lock } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
@@ -46,12 +47,7 @@ async function SettingsContent() {
 export default function SettingsPage() {
   return (
     <Suspense
-      fallback={
-        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-400" />
-          <p className="text-xs text-zinc-500">Loading settings...</p>
-        </div>
-      }
+      fallback={<PageLoader label="Loading settings…" />}
     >
       <SettingsContent />
     </Suspense>

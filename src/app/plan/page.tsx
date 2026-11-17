@@ -1,7 +1,8 @@
 import { Suspense } from "react";
+import { PageLoader } from "@/components/ui/loaders";
 import { connection } from "next/server";
 import Link from "next/link";
-import { Loader2, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
 import { getPlanDataAction } from "@/features/plan/actions";
@@ -46,12 +47,7 @@ async function PlanContent({ searchParams }: { searchParams: Promise<{ tab?: str
 export default function PlanPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   return (
     <Suspense
-      fallback={
-        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-400" />
-          <p className="text-xs text-zinc-500">Loading your plan...</p>
-        </div>
-      }
+      fallback={<PageLoader label="Loading your plan…" />}
     >
       <PlanContent searchParams={searchParams} />
     </Suspense>

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
+import { PageLoader } from "@/components/ui/loaders";
 import { connection } from "next/server";
-import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getHistoryAction } from "@/features/history/actions";
 import { HistoryView } from "@/features/history/components/history-view";
@@ -27,12 +27,7 @@ async function HistoryContent() {
 export default function HistoryPage() {
   return (
     <Suspense
-      fallback={
-        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-400" />
-          <p className="text-xs text-zinc-500">Loading your history...</p>
-        </div>
-      }
+      fallback={<PageLoader label="Loading your history…" />}
     >
       <HistoryContent />
     </Suspense>

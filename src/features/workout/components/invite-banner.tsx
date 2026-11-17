@@ -71,8 +71,10 @@ export function InviteBanner() {
     };
   }, [hidden]);
 
-  const joiningScreen =
-    joining && pathname !== `/session/${joining.sessionId}` ? <JoiningScreen hostName={joining.hostName} /> : null;
+  // Once the workout route is showing, the hand-off is done: clear it so it never comes back on leaving.
+  const arrived = joining !== null && pathname === `/session/${joining.sessionId}`;
+  if (arrived) setJoining(null); // adjusting state while rendering, React's pattern for this
+  const joiningScreen = joining && !arrived ? <JoiningScreen hostName={joining.hostName} /> : null;
 
   // Already inside that workout's invite screen: it has its own Join / Decline.
   const visible = invites.filter((i) => pathname !== `/session/${i.sessionId}`);

@@ -13,7 +13,9 @@ export function InviteCard({ sessionId, name, hostName }: { sessionId: string; n
   const router = useRouter();
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
+  /** Stays true from the tap until the refreshed page swaps this card for the workout (cleared on error). */
   const [joining, setJoining] = React.useState(false);
+  React.useLayoutEffect(() => () => setJoining(false), []);
 
   function join() {
     setError(null);
@@ -47,8 +49,8 @@ export function InviteCard({ sessionId, name, hostName }: { sessionId: string; n
       </p>
       {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
       <div className="flex w-full flex-col gap-2">
-        <Button size="lg" disabled={pending} onClick={join}>
-          {pending && joining && <Loader2 className="h-4 w-4 animate-spin" />} {pending && joining ? "Joining…" : "Join workout"}
+        <Button size="lg" disabled={pending || joining} onClick={join}>
+          {joining && <Loader2 className="h-4 w-4 animate-spin" />} {joining ? "Joining…" : "Join workout"}
         </Button>
         <Button variant="secondary" disabled={pending} onClick={decline}>
           Decline
@@ -57,7 +59,7 @@ export function InviteCard({ sessionId, name, hostName }: { sessionId: string; n
           Decide later
         </Link>
       </div>
-      {pending && joining && <JoiningScreen hostName={hostName} />}
+      {joining && <JoiningScreen hostName={hostName} />}
     </div>
   );
 }

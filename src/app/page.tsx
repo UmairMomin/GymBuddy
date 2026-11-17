@@ -1,6 +1,6 @@
 import { Suspense } from "react";
+import { PageLoader } from "@/components/ui/loaders";
 import { connection } from "next/server";
-import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getTodayAction } from "@/features/workout/actions";
 import { TodayView } from "@/features/workout/components/today-view";
@@ -27,12 +27,7 @@ async function TodayContent() {
 export default function HomePage() {
   return (
     <Suspense
-      fallback={
-        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-400" />
-          <p className="text-xs text-zinc-500">Loading...</p>
-        </div>
-      }
+      fallback={<PageLoader label="Loading today…" />}
     >
       <TodayContent />
     </Suspense>

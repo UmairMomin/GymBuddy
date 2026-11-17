@@ -8,7 +8,6 @@ export function JoiningScreen({ hostName }: { hostName: string }) {
   const first = hostName.split(" ")[0] || hostName;
   return (
     <LoadingScreen
-      overlay
       title={`Joining ${first}'s workout`}
       subtitle="You'll get a copy of their exercises. Your sets stay your own."
       steps={[`Connecting to ${first}`, "Copying their exercises"]}

@@ -516,6 +516,17 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   const [query, setQuery] = React.useState("");
   const [banner, setBanner] = React.useState<string | null>(null);
   const [busy, startRawTransition] = React.useTransition();
+  /** Set once Finish / Discard succeeds: its sheet stays busy until the page is gone, so nothing flashes behind it. */
+  const [leaving, setLeaving] = React.useState<"finish" | "discard" | null>(null);
+  // Next keeps this page alive (hidden) after leaving; reset so Back never shows a stale, busy sheet.
+  React.useLayoutEffect(
+    () => () => {
+      setLeaving(null);
+      setFinishOpen(false);
+      setDiscardOpen(false);
+    },
+    []
+  );
   /** Like startTransition, but a failed request (expired session, dropped connection) shows a banner instead of crashing the page. */
   function startTransition(fn: () => Promise<void>) {
     startRawTransition(async () => {
@@ -1177,6 +1188,7 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         setFinishOpen(false);
         return;
       }
+      setLeaving("finish");
       router.push("/");
       router.refresh();
     });
@@ -1185,11 +1197,12 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
   function discard() {
     startTransition(async () => {
       const res = await discardWorkoutAction(session.id);
-      setDiscardOpen(false);
       if (res.error) {
+        setDiscardOpen(false);
         setBanner(res.error);
         return;
       }
+      setLeaving("discard");
       router.push("/");
       router.refresh();
     });
@@ -1741,16 +1754,16 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         title="Finish your workout?"
         footer={
           <div className="space-y-2">
-            <Button className="w-full" disabled={busy} onClick={() => finish()}>
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Finish my workout
+            <Button className="w-full" disabled={busy || leaving !== null} onClick={() => finish()}>
+              {(busy || leaving) && <Loader2 className="h-4 w-4 animate-spin" />} {leaving === "finish" ? "Finishing…" : "Finish my workout"}
             </Button>
             {partner?.status === "joined" && !partner.completedAt && (
-              <Button variant="secondary" className="w-full" disabled={busy} onClick={() => finish(true)}>
+              <Button variant="secondary" className="w-full" disabled={busy || leaving !== null} onClick={() => finish(true)}>
                 Finish for both of us
               </Button>
             )}
             {session.isHost && (
-              <Button variant="ghost" className="w-full text-red-400" disabled={busy} onClick={() => setDiscardOpen(true)}>
+              <Button variant="ghost" className="w-full text-red-400" disabled={busy || leaving !== null} onClick={() => setDiscardOpen(true)}>
                 Discard workout
               </Button>
             )}
@@ -1795,8 +1808,8 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
         title="Discard workout?"
         footer={
           <div className="space-y-2">
-            <Button variant="ghost" className="w-full text-red-400" disabled={busy} onClick={discard}>
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Discard workout
+            <Button variant="ghost" className="w-full text-red-400" disabled={busy || leaving !== null} onClick={discard}>
+              {(busy || leaving) && <Loader2 className="h-4 w-4 animate-spin" />} {busy || leaving ? "Discarding…" : "Discard workout"}
             </Button>
             <Button variant="secondary" className="w-full" onClick={() => setDiscardOpen(false)}>
               Keep it

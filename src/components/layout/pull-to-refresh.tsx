@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Dumbbell } from "lucide-react";
+import { Barbell } from "@/components/ui/loaders";
 
 /** Other components (e.g. the live workout) listen for this to re-fetch their own client state. */
 export const REFRESH_EVENT = "gb:refresh";
@@ -65,14 +65,14 @@ export function PullToRefresh() {
       style={{ transform: `translateY(${shown - 30}px)` }}
     >
       <span className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 shadow-lg">
-        <Dumbbell
-          className={`h-4 w-4 text-emerald-400 ${refreshing ? "gb-rep" : ""}`}
+        <span
+          className="flex"
           style={
-            refreshing
-              ? { animation: "gb-rep 0.9s ease-in-out infinite" }
-              : { transform: `scale(${0.6 + Math.min(shown / THRESHOLD, 1) * 0.4})`, opacity: 0.4 + Math.min(shown / THRESHOLD, 1) * 0.6 }
+            refreshing ? undefined : { transform: `scale(${0.6 + Math.min(shown / THRESHOLD, 1) * 0.4})`, opacity: 0.4 + Math.min(shown / THRESHOLD, 1) * 0.6 }
           }
-        />
+        >
+          <Barbell width={26} lifting={refreshing} />
+        </span>
       </span>
     </div>
   );

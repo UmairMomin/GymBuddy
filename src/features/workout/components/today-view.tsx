@@ -32,8 +32,13 @@ export function TodayView({ data }: { data: TodayData }) {
   const [withBuddy, setWithBuddy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [pending, startTransition] = React.useTransition();
-  /** What is being started, for the waiting screen: a routine's name, or null for freestyle. */
-  const [starting, setStarting] = React.useState<string | null>(null);
+  /**
+   * What is being started (a routine's name, or null for freestyle). The waiting screen stays up from the tap
+   * until the workout route takes over, not just while the action runs, so Today never flashes back between.
+   */
+  const [starting, setStarting] = React.useState<{ name: string | null } | null>(null);
+  // Next keeps this page alive (hidden) after navigating away; drop the waiting screen so Back shows Today.
+  React.useLayoutEffect(() => () => setStarting(null), []);
 
   const byId = new Map(data.routines.map((r) => [r.id, r]));
   const scheduledId = today >= 0 ? data.schedule[today] : null;
@@ -45,10 +50,11 @@ export function TodayView({ data }: { data: TodayData }) {
 
   function start(routineId: string | null) {
     setError(null);
-    setStarting(routineId ? byId.get(routineId)?.name ?? null : null);
+    setStarting({ name: routineId ? byId.get(routineId)?.name ?? null : null });
     startTransition(async () => {
       const res = await startWorkoutAction(routineId, Boolean(data.buddy) && withBuddy);
       if (res.error || !res.data) {
+        setStarting(null);
         setError(res.error ?? "Couldn't start the workout");
         return;
       }
@@ -309,10 +315,9 @@ export function TodayView({ data }: { data: TodayData }) {
         </ul>
       </Sheet>
 
-      {pending && (
+      {starting && (
         <LoadingScreen
-          overlay
-          title={starting ? `Starting ${starting}` : "Starting workout"}
+          title={starting.name ? `Starting ${starting.name}` : "Starting workout"}
           subtitle="Hang tight, getting your exercises ready"
           steps={["Starting your workout", "Loading exercises"]}
         />
