@@ -445,7 +445,8 @@ function firstOpenId(list: SessionExerciseView[]): string | null {
   return next?.id ?? null;
 }
 
-export function ActiveWorkout({ data }: { data: WorkoutData }) {
+/** `editing`: a completed workout opened from its summary, so Back returns there instead of Today. */
+export function ActiveWorkout({ data, editing = false }: { data: WorkoutData; editing?: boolean }) {
   const router = useRouter();
   const { unit, session, userId } = data;
 
@@ -1284,8 +1285,8 @@ export function ActiveWorkout({ data }: { data: WorkoutData }) {
       <header className="mb-3.5 space-y-3 border-b border-zinc-800 pb-3">
         <div className="flex items-center gap-3">
           <Link
-            href="/"
-            aria-label="Back to Today"
+            href={editing ? `/session/${session.id}` : "/"}
+            aria-label={editing ? "Back to summary" : "Back to Today"}
             className="-ml-2.5 flex h-11 w-11 shrink-0 items-center justify-center text-zinc-100"
           >
             <ChevronLeft className="h-5 w-5" />

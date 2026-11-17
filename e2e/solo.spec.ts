@@ -59,7 +59,11 @@ test("solo: plan, log a workout with placeholders, finish, history, edit after f
   await expect(page.getByText("Barbell Bench Press").first()).toBeVisible();
 
   // Correct a set after the workout is finished; History recomputes (65x8 + 60x8 = 1000)
-  await page.getByRole("link", { name: /view or correct sets/i }).first().click();
+  // A completed workout opens as a read-only summary; Edit workout opens the full screen.
+  await page.getByRole("link", { name: /view workout/i }).first().click();
+  await expect(page.getByText(/^Completed/)).toBeVisible();
+  await expect(page.getByLabel(/^Your set 1 weight/)).toHaveCount(0);
+  await page.getByRole("link", { name: /edit workout/i }).click();
   await expect(page.getByText(/^Completed/)).toBeVisible();
   const weight = page.getByLabel(/^Your set 1 weight/);
   await weight.fill("65");

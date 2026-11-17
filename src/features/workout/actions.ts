@@ -6,6 +6,8 @@ import { requireUser, SIGN_IN_REQUIRED } from "@/lib/supabase/require-user";
 import { idSchema, saveSetSchema, sessionNameSchema, type SaveSetInput } from "@/features/workout/schemas";
 import type { PlanExercise } from "@/features/plan/actions";
 import { sendInvitePush } from "@/features/notifications/push";
+import { overloadHint, type OverloadHint } from "@/features/workout/overload";
+import { compareExercise, e1rm, isPersonalRecord, percentChange, volumeOf, type Delta } from "@/features/workout/summary";
 
 export type ActionResult<T = unknown> = { data?: T; error?: string; success?: boolean };
 
@@ -435,6 +437,147 @@ export async function getWorkoutAction(sessionId: string): Promise<ActionResult<
       },
       exercises,
       catalog: catalogRes.data ?? [],
+    },
+  };
+}
+
+export type SummaryExercise = {
+  id: string;
+  name: string;
+  /** My completed sets in order, warm-ups included (they are shown but never counted). */
+  sets: Array<{ id: string; set_type: string; weight_kg: number; reps: number }>;
+  /** Against the last time I did it; null on a first time. */
+  delta: Delta | null;
+  isPr: boolean;
+  /** Double-progression target for next time, in the user's unit. */
+  next: OverloadHint | null;
+};
+
+export type WorkoutSummary = {
+  session: { id: string; name: string; startedAt: string; endedAt: string | null };
+  unit: "kg" | "lb";
+  exercises: SummaryExercise[];
+  workingSets: number;
+  volumeKg: number;
+  /** My previous completed workout of the same routine; null for freestyle or a first run. */
+  previous: { name: string; startedAt: string; volumeDeltaPct: number | null } | null;
+};
+
+/**
+ * The read-only recap of a completed workout. `data: null` means "not a completed workout of mine":
+ * the page then falls through to the normal workout screen, which reports any real error.
+ * shortcut: one history query per exercise, capped at PostgREST's 1000-row limit; page it when a single
+ * exercise can have more than that many logged working sets.
+ */
+export async function getWorkoutSummaryAction(sessionId: string): Promise<ActionResult<WorkoutSummary | null>> {
+  if (!idSchema.safeParse(sessionId).success) return { data: null };
+  const supabase = await createClient();
+  const user = await requireUser(supabase);
+  if (!user) return { error: SIGN_IN_REQUIRED };
+
+  const { data: s } = await supabase
+    .from("workout_sessions")
+    .select("id, name, status, started_at, ended_at, routine_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (!s || s.status !== "completed") return { data: null };
+
+  const previousSession = async () => {
+    if (!s.routine_id) return null;
+    const { data } = await supabase
+      .from("workout_sessions")
+      .select("id, name, started_at")
+      .eq("routine_id", s.routine_id)
+      .eq("status", "completed")
+      .lt("started_at", s.started_at)
+      .order("started_at", { ascending: false })
+      .limit(1);
+    return data?.[0] ?? null;
+  };
+
+  const [listRes, setsRes, profileRes, prev] = await Promise.all([
+    supabase
+      .from("session_exercises")
+      .select("id, exercise_id, rep_min, rep_max, exercises(name, primary_equipment)")
+      .eq("session_id", sessionId)
+      .eq("user_id", user.id)
+      .order("position", { ascending: true }),
+    supabase
+      .from("workout_sets")
+      .select("id, exercise_id, set_type, weight_kg, reps")
+      .eq("session_id", sessionId)
+      .eq("user_id", user.id)
+      .eq("completed", true)
+      .order("set_order"),
+    supabase.from("profiles").select("preferred_unit").eq("id", user.id).maybeSingle(),
+    previousSession(),
+  ]);
+  if (listRes.error || setsRes.error) return { error: "Couldn't load this workout" };
+  const unit: "kg" | "lb" = profileRes.data?.preferred_unit === "lb" ? "lb" : "kg";
+  const list = listRes.data ?? [];
+  const allSets = setsRes.data ?? [];
+  const working = (rows: Array<{ set_type: string; weight_kg: number; reps: number }>) =>
+    rows.filter((r) => r.set_type !== "warmup").map((r) => ({ weight_kg: Number(r.weight_kg), reps: r.reps }));
+
+  const history = await Promise.all(
+    list.map(async (l) => {
+      const { data } = await supabase
+        .from("workout_sets")
+        .select("session_id, weight_kg, reps, workout_sessions!inner(started_at, status)")
+        .eq("user_id", user.id)
+        .eq("exercise_id", l.exercise_id)
+        .eq("completed", true)
+        .neq("set_type", "warmup")
+        .eq("workout_sessions.status", "completed")
+        .lt("workout_sessions.started_at", s.started_at);
+      const rows = (data ?? []).map((r) => {
+        const ws = Array.isArray(r.workout_sessions) ? r.workout_sessions[0] : r.workout_sessions;
+        return { sessionId: r.session_id, startedAt: ws?.started_at ?? "", set: { weight_kg: Number(r.weight_kg), reps: r.reps } };
+      });
+      const lastStart = rows.reduce((m, r) => (r.startedAt > m ? r.startedAt : m), "");
+      const lastSession = rows.find((r) => r.startedAt === lastStart)?.sessionId;
+      return {
+        last: rows.filter((r) => r.sessionId === lastSession).map((r) => r.set),
+        bestE1rm: rows.length ? Math.max(...rows.map((r) => e1rm(r.set))) : null,
+      };
+    })
+  );
+
+  const exercises: SummaryExercise[] = list.map((l, i) => {
+    const ex = Array.isArray(l.exercises) ? l.exercises[0] : l.exercises;
+    const mine = allSets.filter((x) => x.exercise_id === l.exercise_id);
+    const now = working(mine);
+    return {
+      id: l.id,
+      name: ex?.name ?? "Exercise",
+      sets: mine.map((x) => ({ id: x.id, set_type: x.set_type, weight_kg: Number(x.weight_kg), reps: x.reps })),
+      delta: compareExercise(now, history[i].last, unit),
+      isPr: isPersonalRecord(now, history[i].bestE1rm),
+      next: overloadHint({ last: now, repMin: l.rep_min, repMax: l.rep_max, equipment: ex?.primary_equipment ?? null, unit }),
+    };
+  });
+
+  const volumeKg = volumeOf(working(allSets));
+  let previous: WorkoutSummary["previous"] = null;
+  if (prev) {
+    const { data: prevSets } = await supabase
+      .from("workout_sets")
+      .select("set_type, weight_kg, reps")
+      .eq("session_id", prev.id)
+      .eq("user_id", user.id)
+      .eq("completed", true);
+    const prevVolume = volumeOf(working(prevSets ?? []));
+    previous = { name: prev.name, startedAt: prev.started_at, volumeDeltaPct: percentChange(volumeKg, prevVolume) };
+  }
+
+  return {
+    data: {
+      session: { id: s.id, name: s.name, startedAt: s.started_at, endedAt: s.ended_at },
+      unit,
+      exercises,
+      workingSets: working(allSets).length,
+      volumeKg,
+      previous,
     },
   };
 }

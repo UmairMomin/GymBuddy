@@ -132,7 +132,7 @@ export function HistoryView({ data }: { data: HistoryData }) {
                         </ul>
                         <div className="flex items-center justify-between gap-2">
                           <Link href={`/session/${s.id}`} className="inline-block text-xs font-semibold text-emerald-400 underline-offset-4 hover:underline">
-                            View or correct sets
+                            View workout
                           </Link>
                           {s.is_freestyle && <RenameSession sessionId={s.id} name={s.name} />}
                         </div>
