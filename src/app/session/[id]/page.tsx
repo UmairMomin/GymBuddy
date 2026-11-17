@@ -9,9 +9,16 @@ import { InviteCard } from "@/features/workout/components/invite-card";
 import { ActiveWorkout } from "@/features/workout/components/active-workout";
 import { WorkoutSummaryView } from "@/features/workout/components/workout-summary";
 
-async function WorkoutContent({ params, edit }: { params: Promise<{ id: string }>; edit: boolean }) {
+async function WorkoutContent({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ edit?: string | string[] }>;
+}) {
   await connection();
   const { id } = await params;
+  const edit = (await searchParams).edit === "1";
   const supabase = await createClient();
   const {
     data: { user },
@@ -45,19 +52,18 @@ async function WorkoutContent({ params, edit }: { params: Promise<{ id: string }
   return <ActiveWorkout key={res.data.session.id} data={res.data} editing={edit && res.data.session.status === "completed"} />;
 }
 
-export default async function SessionPage({
+export default function SessionPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ edit?: string | string[] }>;
 }) {
-  const edit = (await searchParams).edit === "1";
   return (
     <Suspense
       fallback={<LoadingScreen title="Loading workout" subtitle="Getting your exercises ready" />}
     >
-      <WorkoutContent params={params} edit={edit} />
+      <WorkoutContent params={params} searchParams={searchParams} />
     </Suspense>
   );
 }

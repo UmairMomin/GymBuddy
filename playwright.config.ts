@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const PORT = 3100;
+const PORT = Number(process.env.E2E_PORT ?? 3100);
 
 /**
  * End-to-end suite. It builds and serves the app from an isolated directory on its own port, and drives
