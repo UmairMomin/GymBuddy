@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { AppearanceCard } from "@/features/auth/components/appearance-card";
+import { InstallAppCard } from "@/features/notifications/components/install-app-card";
 import { PushSettingsCard } from "@/features/notifications/components/push-settings-card";
 
 export function SettingsView({ initialSettings }: { initialSettings: UserProfileSettings }) {
@@ -104,6 +105,8 @@ export function SettingsView({ initialSettings }: { initialSettings: UserProfile
       )}
 
       <AppearanceCard />
+
+      <InstallAppCard />
 
       <PushSettingsCard />
 
